@@ -7,7 +7,6 @@ export function WorkspaceLayout() {
 
   if (!slug) return <div>Workspace not found</div>;
 
-  // For now use slug as workspace ID — will be resolved via API later
   return (
     <WSProvider workspaceId={slug}>
       <div className="flex h-screen bg-background text-foreground">

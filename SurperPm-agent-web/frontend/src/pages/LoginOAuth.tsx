@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Search } from 'lucide-react'
-import { api, Repo } from '@/api/client'
+import { api } from '@/lib/api'
+import type { Repo, User } from '@/api/client'
+import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/retroui/Button'
 import { Input } from '@/components/retroui/Input'
 import { Label } from '@/components/retroui/Label'
@@ -144,17 +146,23 @@ function ConnectStep({ loading, error, onConnect }: {
           {error && (
             <Alert status="warning">
               <Alert.Title>连接失败</Alert.Title>
-              <Alert.Description>{error}</Alert.Description>
+              <Alert.Description>
+                {error}
+                {error.includes('not configured') && (
+                  <span className="block mt-1">本地开发请使用下方 PAT 登录。</span>
+                )}
+              </Alert.Description>
             </Alert>
           )}
 
           <div className="border-t-2 pt-4">
-            <p className="text-xs text-muted-foreground">
-              或者使用{' '}
-              <Link to="/login-pat" className="text-[#8B5CF6] underline decoration-[#8B5CF6] decoration-2 underline-offset-4 hover:decoration-4">
-                Personal Access Token
-              </Link>{' '}
-              手动输入仓库地址。
+            <Link to="/login-pat" className="block">
+              <Button variant="outline" className="w-full">
+                使用 Personal Access Token 登录
+              </Button>
+            </Link>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              适合本地开发或无 OAuth App 配置的场景
             </p>
           </div>
 
@@ -390,6 +398,7 @@ function FinalStep({
 
 export default function LoginOAuth() {
   const navigate = useNavigate()
+  const { refresh } = useAuth()
 
   const [step, setStep] = useState<Step>('connect')
   const [loading, setLoading] = useState(false)
@@ -431,7 +440,7 @@ export default function LoginOAuth() {
     setLoading(true)
     setStep('select')
     try {
-      const [user, repos] = await Promise.all([api.auth.me(), api.auth.githubRepos()])
+      const [user, repos] = await Promise.all([api.get<User>('/auth/me'), api.get<Repo[]>('/auth/github/repos')])
       setUsername(user.username)
       setAvatarUrl(user.avatar_url || '')
       setRepos(repos)
@@ -447,7 +456,7 @@ export default function LoginOAuth() {
     setError('')
     setLoading(true)
     try {
-      const { url } = await api.auth.githubAuthorize()
+      const { url } = await api.get<{ url: string }>('/auth/github/authorize')
       window.location.href = url
     } catch (e) {
       setError(e instanceof Error ? e.message : '无法启动 GitHub 授权')
@@ -465,11 +474,20 @@ export default function LoginOAuth() {
     setError('')
     setLoading(true)
     try {
-      const result = await api.auth.githubComplete({
-        repo: `${selectedRepo.owner}/${selectedRepo.name}`,
+      const repoFullName = `${selectedRepo.owner}/${selectedRepo.name}`
+      await api.post('/auth/github/complete', {
+        repo: repoFullName,
         anthropic_key: anthropicKey.trim(),
       })
-      navigate(result.profile_missing ? '/setup' : '/goal')
+      refresh()
+
+      const workspaces = await api.get<{ id: string; name: string; slug: string; repo_url?: string }[]>('/workspaces')
+      let ws = workspaces.find((w) => w.repo_url === repoFullName)
+      if (!ws) {
+        const slug = selectedRepo.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+        ws = await api.post<{ id: string; name: string; slug: string }>('/workspaces', { name: selectedRepo.name, slug, repo_url: repoFullName })
+      }
+      navigate(`/workspace/${ws.slug}/goals`)
     } catch (e) {
       setError(e instanceof Error ? e.message : '登录失败，请重试')
     } finally {

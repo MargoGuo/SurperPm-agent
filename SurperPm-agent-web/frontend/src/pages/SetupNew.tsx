@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/api/client'
+import { api } from '@/lib/api'
 import { Button } from '@/components/retroui/Button'
 import { Card } from '@/components/retroui/Card'
 import { Text } from '@/components/retroui/Text'
@@ -61,8 +61,8 @@ export default function SetupNew() {
           return
         }
         const [stateRes, teamRes] = await Promise.all([
-          api.setup.state(),
-          api.setup.teamProfile(),
+          api.get<{ completed: boolean; auto_detected_languages: Record<string, number>; answers: Record<string, unknown> | null }>('/setup/state'),
+          api.get<{ team_name: string; description: string; members: { login: string; avatar_url: string }[]; languages: Record<string, number> }>('/setup/team-profile'),
         ])
         _stateCache = stateRes
         _teamCache = teamRes
@@ -440,7 +440,7 @@ function DonePhase({ answers, autoLang, onGoProfile }: {
   const handleSave = async () => {
     setDoneSaving(true)
     try {
-      await api.setup.finish({ answers: answers as Record<string, unknown>, auto_detected_languages: autoLang })
+      await api.post('/setup/finish', { answers: answers as Record<string, unknown>, auto_detected_languages: autoLang })
       _stateCache = { completed: true, auto_detected_languages: autoLang, answers: answers as Record<string, unknown> }
     } catch (e) {
       // Still allow viewing profile even if save fails
@@ -532,7 +532,7 @@ function ProfileView({ answers, setAnswers }: {
     setEditIdx(null)
     setSaving(true)
     try {
-      await api.setup.updateProfile({ answers: next as Record<string, unknown> })
+      await api.post('/setup/update-profile', { answers: next as Record<string, unknown> })
     } catch (err) {
       console.error('Failed to update profile:', err)
     } finally {

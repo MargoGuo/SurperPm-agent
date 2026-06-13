@@ -4,6 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { workspaceListOptions } from "@/lib/queries/workspaces";
 import { SshKeyDisplay } from "@/components/settings/ssh-key-display";
 import { SecretsManager } from "@/components/settings/secrets-manager";
+import { Text } from "@/components/retroui/Text";
+import { Card } from "@/components/retroui/Card";
+import { Input } from "@/components/retroui/Input";
+import { Label } from "@/components/retroui/Label";
 
 type Tab = "general" | "ssh" | "secrets";
 
@@ -24,24 +28,22 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col h-full p-6">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+      <Text as="h2" className="text-2xl mb-6">Settings</Text>
 
-      <div className="border-b border-border mb-6">
-        <nav className="flex gap-4">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`pb-2 px-1 text-sm font-medium transition-colors border-b-2 ${
-                activeTab === tab.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      <div className="flex gap-2 mb-6">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium border-2 transition-all ${
+              activeTab === tab.id
+                ? "border-border bg-primary shadow-[3px_3px_0_0_#000] text-foreground"
+                : "border-border bg-background text-muted-foreground hover:bg-muted hover:shadow-[2px_2px_0_0_#000]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex-1 min-h-0">
@@ -57,19 +59,26 @@ export default function SettingsPage() {
 
 function GeneralTab({ workspaceName }: { workspaceName: string }) {
   return (
-    <div className="space-y-4 max-w-lg">
-      <div>
-        <label className="block text-sm font-medium mb-1">Workspace Name</label>
-        <input
-          type="text"
-          value={workspaceName}
-          readOnly
-          className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm cursor-not-allowed"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          Workspace name editing is not available yet.
-        </p>
-      </div>
-    </div>
+    <Card className="max-w-lg">
+      <Card.Header>
+        <Card.Title>Workspace Info</Card.Title>
+      </Card.Header>
+      <Card.Content>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="ws-name" className="mb-1.5 block font-head text-sm">Workspace Name</Label>
+            <Input
+              id="ws-name"
+              value={workspaceName}
+              readOnly
+              className="font-mono cursor-not-allowed opacity-70"
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Workspace name editing is not available yet.
+            </p>
+          </div>
+        </div>
+      </Card.Content>
+    </Card>
   );
 }
