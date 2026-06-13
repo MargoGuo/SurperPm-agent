@@ -123,7 +123,6 @@ def commit_file(
 ) -> dict:
     """Create or update a file in the repo."""
     import base64
-    import json
 
     encoded = base64.b64encode(content.encode("utf-8")).decode()
     url = f"{_GITHUB_API}/repos/{owner}/{repo}/contents/{path}"

@@ -1,5 +1,6 @@
 """Session cookie helpers — itsdangerous-signed payloads."""
 import logging
+
 from itsdangerous import BadSignature, URLSafeSerializer
 
 from app.config import settings

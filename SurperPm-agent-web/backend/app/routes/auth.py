@@ -14,8 +14,8 @@ from fastapi import APIRouter, Cookie, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 
 from app.config import settings
-from app.services import session as session_svc
 from app.services import github_client
+from app.services import session as session_svc
 
 _logger = logging.getLogger(__name__)
 
@@ -38,7 +38,10 @@ def _post_with_retry(url: str, json: dict, max_retries: int = 3) -> requests.Res
             last_err = e
             if attempt < max_retries - 1:
                 delay = (attempt + 1) * 1.5
-                _logger.warning("Token exchange attempt %d failed (%s), retrying in %.1fs", attempt + 1, e, delay)
+                _logger.warning(
+                    "Token exchange attempt %d failed (%s), retrying in %.1fs",
+                    attempt + 1, e, delay,
+                )
                 time.sleep(delay)
     _logger.error("Token exchange failed after %d attempts: %s", max_retries, last_err)
     return None

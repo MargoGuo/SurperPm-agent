@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, HTTPException
@@ -169,7 +169,8 @@ async def finish(
         return {"ok": True, "sha": result["sha"]}
     except Exception as e:
         _logger.error("commit failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to save profile")
+        raise HTTPException(status_code=500, detail="Failed to save profile") from e
+
 
 
 @router.post("/update-profile")
@@ -197,7 +198,8 @@ async def update_profile(
         return {"ok": True, "sha": result["sha"]}
     except Exception as e:
         _logger.error("update failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to update profile")
+        raise HTTPException(status_code=500, detail="Failed to update profile") from e
+
 
 
 # ── Profile MD rendering ──────────────────────────────────────
@@ -230,18 +232,23 @@ def _parse_profile_json(md: str) -> dict | None:
         return None
 
 
+def _label(cat: str, answers: dict, key: str) -> str:
+    return _LABELS[cat].get(answers.get(key, ""), answers.get(key, ""))
+
+
 def _render_profile_md(username: str, answers: dict, auto_lang: dict) -> str:
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    role = _LABELS["role"].get(answers.get("role", ""), answers.get("role", ""))
-    exp = _LABELS["experience"].get(answers.get("experience", ""), answers.get("experience", ""))
-    review = _LABELS["review_style"].get(answers.get("review_style", ""), answers.get("review_style", ""))
-    decision = _LABELS["decision_style"].get(answers.get("decision_style", ""), answers.get("decision_style", ""))
-    test = _LABELS["test_approach"].get(answers.get("test_approach", ""), answers.get("test_approach", ""))
-    comm = _LABELS["communication"].get(answers.get("communication", ""), answers.get("communication", ""))
+    now = datetime.now(UTC).strftime("%Y-%m-%d")
+    role = _label("role", answers, "role")
+    exp = _label("experience", answers, "experience")
+    review = _label("review_style", answers, "review_style")
+    decision = _label("decision_style", answers, "decision_style")
+    test = _label("test_approach", answers, "test_approach")
+    comm = _label("communication", answers, "communication")
     tech_stack = answers.get("tech_stack", [])
     if isinstance(tech_stack, list):
         tech_stack = ", ".join(tech_stack)
-    lang_lines = "\n".join(f"- {lang}: {pct}%" for lang, pct in auto_lang.items()) if auto_lang else "- (none)"
+    lang_items = [f"- {lang}: {pct}%" for lang, pct in auto_lang.items()]
+    lang_lines = "\n".join(lang_items) if auto_lang else "- (none)"
 
     return f"""# Personal Profile
 
