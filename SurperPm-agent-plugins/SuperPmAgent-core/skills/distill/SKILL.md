@@ -23,7 +23,7 @@ Choose one destination:
 
 - `SuperPmAgent-coding/skills/fixes/`: reusable engineering fix or tool workaround.
 - `SuperPmAgent-business/skills/`: reusable business-change pattern.
-- `knowledge/domain/`: domain convention or Conduit fact.
+- `knowledge/domain/`: domain convention or project-specific fact.
 - `knowledge/extensions/`: context-sensitive prompt rule.
 
 ## Rules

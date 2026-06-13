@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Read-only reviewer for a SuperPmAgent-generated Conduit change before PR submission.
+description: Read-only reviewer for a SuperPmAgent-generated change before PR submission.
 tools: Read, Glob, Grep, Bash
 ---
 

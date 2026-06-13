@@ -1,6 +1,6 @@
 ---
 name: repo-explorer
-description: Read-only Conduit repository locator for SuperPmAgent delivery loops.
+description: Read-only repository locator for SuperPmAgent delivery loops.
 tools: Read, Glob, Grep, Bash
 ---
 

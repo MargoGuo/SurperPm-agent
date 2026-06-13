@@ -1,6 +1,6 @@
 ---
 name: SuperPmAgent-coding
-description: Implement a scoped Conduit code change after repo exploration has identified target files and verification commands.
+description: Implement a scoped code change after repo exploration has identified target files and verification commands.
 argument-hint: "implementation plan"
 ---
 

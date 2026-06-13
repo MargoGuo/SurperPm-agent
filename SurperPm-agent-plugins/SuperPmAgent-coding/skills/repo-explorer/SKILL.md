@@ -1,6 +1,6 @@
 ---
 name: SuperPmAgent-repo-explorer
-description: Locate relevant files, routes, models, components, tests, and commands in a Conduit fork before implementation. Use before code edits in a SuperPmAgent goal.
+description: Locate relevant files, routes, models, components, tests, and commands in a target repository before implementation. Use before code edits in a SuperPmAgent goal.
 argument-hint: "goal plus target repository path"
 ---
 
@@ -11,7 +11,7 @@ Find where to change code. Do not edit files.
 ## Inputs
 
 - Goal and accepted scope.
-- Target Conduit fork path.
+- Target repository path.
 - Session notes and decisions.
 - Business skill hints, if any.
 

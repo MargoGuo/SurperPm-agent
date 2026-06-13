@@ -1,6 +1,6 @@
 ---
 name: SuperPmAgent-run-tests
-description: Discover and run the appropriate Conduit lint, test, typecheck, and build commands for a completed code change.
+description: Discover and run the appropriate lint, test, typecheck, and build commands for a completed code change.
 argument-hint: "target repository path and changed files"
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: SuperPmAgent-submit-pr
-description: Create a concise GitHub pull request from a verified Conduit fork change and include loop evidence in the PR body.
+description: Create a concise GitHub pull request from a verified change and include loop evidence in the PR body.
 argument-hint: "target repository path and PR summary"
 ---
 
@@ -10,7 +10,7 @@ Open a reviewable PR only after the run has verification evidence.
 
 ## Preconditions
 
-- Target repository is a Conduit fork.
+- Target repository path is confirmed.
 - Working tree changes match the accepted scope.
 - Relevant checks have passed, or blockers are documented.
 - No secrets or local absolute paths are included.

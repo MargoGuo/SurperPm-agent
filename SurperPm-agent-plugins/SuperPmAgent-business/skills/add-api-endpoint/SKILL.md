@@ -1,6 +1,6 @@
 ---
 name: SuperPmAgent-add-api-endpoint
-description: Apply when a Conduit requirement needs a new backend route, response field, or endpoint behavior that frontend code will consume.
+description: Apply when a requirement needs a new backend route, response field, or endpoint behavior that frontend code will consume.
 argument-hint: "resource, method, route, request shape, response shape"
 ---
 

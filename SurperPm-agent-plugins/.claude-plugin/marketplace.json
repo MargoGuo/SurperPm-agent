@@ -17,7 +17,7 @@
     {
       "name": "SuperPmAgent-business",
       "path": "./SuperPmAgent-business",
-      "description": "Reusable Conduit business-change patterns."
+      "description": "Reusable business-change patterns."
     }
   ]
 }

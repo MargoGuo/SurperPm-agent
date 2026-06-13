@@ -1,6 +1,6 @@
 ---
 name: SuperPmAgent-add-ui-form
-description: Apply when a Conduit requirement adds or changes user input in an existing frontend form.
+description: Apply when a requirement adds or changes user input in an existing frontend form.
 argument-hint: "form name, field name, validation, submit behavior"
 ---
 
@@ -28,6 +28,6 @@ Use this pattern for requirements that add visible user input, such as a URL fie
 
 1. Use `repo-explorer` to find the form, API caller, and display surface.
 2. Implement the input and state mapping.
-3. Keep UI copy consistent with existing Conduit style.
+3. Keep UI copy consistent with existing project style.
 4. Run frontend checks and any API contract tests needed.
 5. Submit a PR with screenshots or manual verification notes when UI changed.

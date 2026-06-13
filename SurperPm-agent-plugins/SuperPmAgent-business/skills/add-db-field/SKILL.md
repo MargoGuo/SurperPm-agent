@@ -1,6 +1,6 @@
 ---
 name: SuperPmAgent-add-db-field
-description: Apply when a Conduit requirement adds a persistent field to an existing model and needs cross-stack consistency.
+description: Apply when a requirement adds a persistent field to an existing model and needs cross-stack consistency.
 argument-hint: "entity name, field name, field type, UI/API expectations"
 ---
 
