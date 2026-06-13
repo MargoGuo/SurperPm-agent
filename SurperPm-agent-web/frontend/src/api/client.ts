@@ -31,6 +31,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export interface User {
   username: string
   repo: string
+  avatar_url?: string
+}
+
+export interface Repo {
+  name: string
+  owner: string
+  private: boolean
+  desc: string
+  updated: string
+  stars: number
 }
 
 export interface GoalRun {
@@ -46,12 +56,21 @@ export interface GoalRun {
 export const api = {
   auth: {
     me: () => request<User>('/auth/me'),
-    login: (pat: string, repo: string) =>
+    login: (pat: string, repo: string, anthropic_key?: string) =>
       request<{ ok: boolean; username: string; repo: string; profile_missing: boolean }>(
         '/auth/login',
-        { method: 'POST', body: JSON.stringify({ pat, repo }) },
+        { method: 'POST', body: JSON.stringify({ pat, repo, anthropic_key }) },
       ),
     logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+    githubAuthorize: () =>
+      request<{ url: string }>('/auth/github/authorize'),
+    githubRepos: () =>
+      request<Repo[]>('/auth/github/repos'),
+    githubComplete: (data: { repo: string; anthropic_key?: string }) =>
+      request<{ ok: boolean; username: string; repo: string; profile_missing: boolean }>(
+        '/auth/github/complete',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
   },
   setup: {
     state: () => request<{ completed: boolean; step: number }>('/setup/state'),

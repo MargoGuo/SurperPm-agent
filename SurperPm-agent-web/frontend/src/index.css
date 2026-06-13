@@ -1,15 +1,97 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@assistant-ui/react-ui/styles/tailwindcss/base-components.css";
 
 :root {
   --font-heading: 'Archivo Black', system-ui, sans-serif;
   --font-sans: 'Space Grotesk Variable', system-ui, sans-serif;
-  --radius: 0.5rem;
+  --radius: 0;
+  --background: #fff;
+  --foreground: #000;
+  --card: #fff;
+  --card-foreground: #000;
+  --primary: #ffdb33;
+  --primary-hover: #ffcc00;
+  --primary-foreground: #000;
+  --secondary: #000;
+  --secondary-foreground: #fff;
+  --muted: #aeaeae;
+  --muted-foreground: #5a5a5a;
+  --accent: #fae583;
+  --accent-foreground: #000;
+  --destructive: #e63946;
+  --destructive-foreground: #fff;
+  --border: #000;
+  --input: #fff;
+  --aui-background: 0 0% 100%;
+  --aui-foreground: 0 0% 0%;
+  --aui-card: 0 0% 100%;
+  --aui-card-foreground: 0 0% 0%;
+  --aui-popover: 0 0% 100%;
+  --aui-popover-foreground: 0 0% 0%;
+  --aui-primary: 52 100% 60%;
+  --aui-primary-foreground: 0 0% 0%;
+  --aui-secondary: 0 0% 0%;
+  --aui-secondary-foreground: 0 0% 100%;
+  --aui-muted: 0 0% 68%;
+  --aui-muted-foreground: 0 0% 35%;
+  --aui-accent: 52 100% 60%;
+  --aui-accent-foreground: 0 0% 0%;
+  --aui-destructive: 354 71% 57%;
+  --aui-destructive-foreground: 0 0% 100%;
+  --aui-border: 0 0% 0%;
+  --aui-input: 0 0% 100%;
+  --aui-ring: 262 83% 66%;
+  --aui-radius: 0;
+  --aui-thread-max-width: 100%;
 }
 
 @theme {
   --font-heading: 'Archivo Black', system-ui, sans-serif;
   --font-sans: 'Space Grotesk Variable', system-ui, sans-serif;
+  --shadow-xs: 1px 1px 0 0 var(--border);
+  --shadow-sm: 2px 2px 0 0 var(--border);
+  --shadow: 3px 3px 0 0 var(--border);
+  --shadow-md: 4px 4px 0 0 var(--border);
+  --shadow-lg: 6px 6px 0 0 var(--border);
+  --shadow-xl: 10px 10px 0 1px var(--border);
+  --shadow-2xl: 16px 16px 0 1px var(--border);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-aui-background: hsl(var(--aui-background));
+  --color-aui-foreground: hsl(var(--aui-foreground));
+  --color-aui-card: hsl(var(--aui-card));
+  --color-aui-card-foreground: hsl(var(--aui-card-foreground));
+  --color-aui-popover: hsl(var(--aui-popover));
+  --color-aui-popover-foreground: hsl(var(--aui-popover-foreground));
+  --color-aui-primary: hsl(var(--aui-primary));
+  --color-aui-primary-foreground: hsl(var(--aui-primary-foreground));
+  --color-aui-secondary: hsl(var(--aui-secondary));
+  --color-aui-secondary-foreground: hsl(var(--aui-secondary-foreground));
+  --color-aui-muted: hsl(var(--aui-muted));
+  --color-aui-muted-foreground: hsl(var(--aui-muted-foreground));
+  --color-aui-accent: hsl(var(--aui-accent));
+  --color-aui-accent-foreground: hsl(var(--aui-accent-foreground));
+  --color-aui-destructive: hsl(var(--aui-destructive));
+  --color-aui-destructive-foreground: hsl(var(--aui-destructive-foreground));
+  --color-aui-border: hsl(var(--aui-border));
+  --color-aui-input: hsl(var(--aui-input));
+  --color-aui-ring: hsl(var(--aui-ring));
+  --radius: var(--radius);
 }
 
 body {
@@ -18,4 +100,755 @@ body {
 
 h1, h2, h3 {
   font-family: var(--font-heading);
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+/* ===== assistant-ui styles ===== */
+/* (replaces @assistant-ui/react-ui/styles/tailwindcss/thread.css —
+   plain CSS to avoid Tailwind v3 @apply / v4 incompatibility) */
+
+/* -- Thread root -- */
+.aui-thread-root {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* -- Thread viewport (scrollable messages area) -- */
+.aui-thread-viewport {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  height: auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-items: stretch;
+  scroll-behavior: smooth;
+  background-color: #fafafa;
+  padding-inline: 20px;
+  padding-top: 28px;
+  padding-bottom: 20px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) #f0f0f0;
+}
+.aui-thread-viewport::-webkit-scrollbar { width: 12px; height: 0; }
+.aui-thread-viewport::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-left: 2px solid var(--border);
+}
+.aui-thread-viewport::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border: 2px solid var(--border);
+  min-height: 40px;
+}
+.aui-thread-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-hover);
+}
+.aui-thread-viewport::-webkit-scrollbar-corner { background: transparent; }
+
+/* -- Viewport footer (fixed below scroll area) -- */
+.aui-thread-viewport-footer {
+  position: static;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: none;
+  background-color: #fff;
+  border-top: 2px solid #eee;
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* -- Scroll to bottom -- */
+.aui-thread-scroll-to-bottom {
+  position: absolute;
+  top: -32px;
+  border-radius: 9999px;
+}
+
+/* -- Followup suggestions -- */
+.aui-thread-followup-suggestions {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.aui-thread-followup-suggestion {
+  background: var(--background, #fff);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 14px;
+  transition: colors 150ms ease-in;
+  cursor: pointer;
+}
+.aui-thread-followup-suggestion:hover {
+  background: var(--muted, #aeaeae);
+  opacity: 0.8;
+}
+
+/* -- Welcome (shown when thread is empty) -- */
+.aui-thread-welcome-root {
+  display: flex;
+  width: 100%;
+  max-width: var(--aui-thread-max-width, 100%);
+  flex-grow: 1;
+  flex-direction: column;
+}
+.aui-thread-welcome-center {
+  display: flex;
+  width: 100%;
+  flex-grow: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+}
+.aui-thread-welcome-message {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--foreground);
+  margin-bottom: 4px;
+}
+.aui-thread-welcome-suggestions {
+  margin-top: 20px;
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+}
+.aui-thread-welcome-suggestion {
+  display: flex;
+  max-width: 260px;
+  flex-grow: 1;
+  flex-basis: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  box-shadow: 3px 3px 0 0 var(--border);
+  background: #fff;
+  padding: 16px 14px;
+  transition: all 120ms ease;
+  cursor: pointer;
+}
+.aui-thread-welcome-suggestion:hover {
+  background: var(--primary);
+  box-shadow: 5px 5px 0 0 var(--border);
+  transform: translate(-1px, -1px);
+}
+.aui-thread-welcome-suggestion-text {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--foreground);
+}
+
+/* -- Composer -- */
+.aui-composer-root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  background: var(--background);
+  border: 2px solid var(--border);
+  box-shadow: 3px 3px 0 0 var(--border);
+  padding-inline: 8px;
+  transition: all 150ms ease;
+}
+.aui-composer-root:focus-within {
+  box-shadow: 5px 5px 0 0 #8B5CF6;
+  border-color: #000;
+}
+.aui-composer-input {
+  max-height: 160px;
+  flex-grow: 1;
+  resize: none;
+  border: none;
+  background: transparent;
+  padding: 14px 8px;
+  font-size: 14px;
+  outline: none;
+  font-family: var(--font-sans);
+}
+.aui-composer-input::placeholder { color: var(--muted-foreground, #5a5a5a); font-style: italic; }
+.aui-composer-input:disabled { cursor: not-allowed; }
+
+.aui-composer-send,
+.aui-composer-cancel,
+.aui-composer-attach {
+  transition: opacity 150ms ease-in;
+}
+
+/* Send button — NeoBrutalism */
+.aui-composer-send {
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border: 2px solid var(--border) !important;
+  box-shadow: 2px 2px 0 0 var(--border) !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 6px 16px !important;
+  margin: 5px !important;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 100ms ease;
+}
+.aui-composer-send:hover {
+  box-shadow: none !important;
+  transform: translate(2px, 2px);
+}
+.aui-composer-send svg { display: none; }
+.aui-composer-send::after { content: '发送'; }
+
+.aui-composer-attach {
+  color: var(--muted-foreground);
+  padding: 4px;
+  margin: 5px 0;
+  width: 28px;
+  height: 28px;
+}
+
+/* Attachments row */
+.aui-composer-attachments {
+  display: flex;
+  width: 100%;
+  flex-direction: row;
+  gap: 12px;
+  padding-inline: 40px;
+}
+
+/* -- Attachment UI -- */
+.aui-attachment-root { position: relative; margin-top: 12px; }
+.aui-attachment-content {
+  display: flex;
+  height: 48px;
+  width: 160px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  padding: 4px;
+}
+.aui-attachment-preview-trigger { cursor: pointer; transition: colors 150ms; }
+.aui-attachment-preview-trigger:hover { background: var(--accent); opacity: 0.5; }
+.aui-attachment-thumb {
+  background: var(--muted, #aeaeae);
+  display: flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+.aui-attachment-text { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.aui-attachment-name {
+  color: var(--muted-foreground);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+  word-break: break-all;
+  font-size: 12px;
+  font-weight: 700;
+}
+.aui-attachment-type { color: var(--muted-foreground); font-size: 12px; }
+.aui-attachment-remove {
+  color: var(--muted-foreground);
+  position: absolute;
+  right: -12px;
+  top: -12px;
+  width: 24px;
+  height: 24px;
+}
+.aui-attachment-remove > svg {
+  background: var(--background, #fff);
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+}
+
+/* -- Text content (MessagePrimitive.Content) -- */
+.aui-text { white-space: pre-line; }
+.aui-text-running::after {
+  content: '\25CF';
+  animation: aui-pulse 2s ease-in-out infinite;
+  font-family: var(--font-sans);
+  margin-left: 4px;
+}
+@keyframes aui-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ===== Message layout (User + Assistant) ===== */
+
+/* -- User message root -- */
+.aui-user-message-root {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+  padding-block: 7px;
+  min-width: 0;
+}
+.aui-user-message-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 82%;
+  min-width: 0;
+}
+
+/* -- User bubble -- */
+.aui-user-bubble {
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 0 #8B5CF6;
+  background: #fff;
+  padding: 15px 20px;
+  font-size: 14px;
+  line-height: 1.72;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  width: 100%;
+}
+
+/* -- Assistant message root -- */
+.aui-assistant-message-root {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding-block: 7px;
+  min-width: 0;
+}
+.aui-assistant-message-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: calc(100% - 44px);
+  min-width: 0;
+  flex: 1;
+}
+
+/* -- Assistant avatar -- */
+.aui-assistant-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--border);
+  background: var(--primary);
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 900;
+  font-family: var(--font-heading);
+  color: var(--primary-foreground);
+  box-shadow: 3px 3px 0 0 var(--border);
+}
+
+/* -- Assistant bubble -- */
+.aui-assistant-bubble {
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 0 var(--border);
+  background: #fff;
+  padding: 15px 20px;
+  font-size: 14px;
+  line-height: 1.72;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  width: 100%;
+}
+
+/* -- Bubble footer (sender + time) -- */
+.aui-bubble-footer {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 9px;
+  border-top: 2px solid #eee;
+}
+.aui-bubble-sender {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border: 2px solid;
+}
+.aui-bubble-sender.user {
+  color: #fff;
+  border-color: #8B5CF6;
+  background: #8B5CF6;
+}
+.aui-bubble-sender.assistant {
+  color: #fff;
+  border-color: #000;
+  background: #000;
+}
+.aui-bubble-dot { color: #ccc; font-size: 10px; }
+.aui-bubble-time { font-size: 11px; color: #aaa; font-family: var(--font-mono); }
+
+/* -- Action bar row (always reserves space) -- */
+.aui-action-row {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  margin-top: 5px;
+  padding-left: 1px;
+}
+.aui-action-bar {
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.aui-user-message-root:hover .aui-action-bar,
+.aui-assistant-message-root:hover .aui-action-bar {
+  opacity: 1;
+}
+.aui-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  border: 2px solid #d4d4d4;
+  background: #fff;
+  color: #888;
+  cursor: pointer;
+  transition: all 120ms ease;
+  padding: 0;
+  box-shadow: 1px 1px 0 0 #d4d4d4;
+}
+.aui-action-btn:hover {
+  color: #000;
+  border-color: #000;
+  box-shadow: 2px 2px 0 0 var(--border);
+  transform: translate(-1px, -1px);
+}
+
+/* -- Branch picker -- */
+.aui-branch-picker {
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #999;
+}
+
+/* -- Inline edit mode -- */
+.aui-edit-bubble {
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 4px 4px 0 0 #8B5CF6;
+}
+.aui-edit-textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: #fff;
+  padding: 15px 20px;
+  font-size: 14px;
+  line-height: 1.72;
+  font-family: var(--font-sans);
+  resize: vertical;
+  min-height: 90px;
+  display: block;
+}
+.aui-edit-textarea:focus {
+  box-shadow: inset 0 0 0 2px #8B5CF6;
+}
+.aui-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-top: 2px solid #eee;
+  background: #fafafa;
+}
+.aui-edit-hint {
+  font-size: 11px;
+  color: #aaa;
+}
+.aui-edit-btns {
+  display: flex;
+  gap: 7px;
+}
+.aui-edit-cancel-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  background: #fff;
+  color: #666;
+  cursor: pointer;
+  transition: all 100ms ease;
+  box-shadow: 2px 2px 0 0 var(--border);
+}
+.aui-edit-cancel-btn:hover {
+  box-shadow: none;
+  transform: translate(1px, 1px);
+  color: #333;
+}
+.aui-edit-send-btn {
+  padding: 5px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid var(--border);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 var(--border);
+  transition: all 100ms ease;
+}
+.aui-edit-send-btn:hover:not(:disabled) {
+  box-shadow: none;
+  transform: translate(1px, 1px);
+}
+.aui-edit-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Hide bottom composer when editing inline */
+.hide-composer-footer .aui-thread-viewport-footer {
+  display: none;
+}
+
+/* -- Custom branch picker (no tooltips, no yellow hover, centered) -- */
+.aui-neo-branch-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+.aui-neo-branch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #d4d4d4;
+  background: #fff;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  transition: all 120ms ease;
+  box-shadow: 1px 1px 0 0 #d4d4d4;
+}
+.aui-neo-branch-btn:hover {
+  color: #000;
+  border-color: #000;
+  box-shadow: 2px 2px 0 0 var(--border);
+  background: #fff;
+  transform: translate(-1px, -1px);
+}
+.aui-neo-branch-state {
+  font-size: 11px;
+  color: #999;
+  min-width: 36px;
+  text-align: center;
+  tabular-nums: true;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+
+/* ===== Markdown content styles (NeoBrutalism) ===== */
+
+.aui-md-h1 { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 900; margin: 16px 0 8px; line-height: 1.3; }
+.aui-md-h2 { font-family: var(--font-heading); font-size: 1.25rem; font-weight: 900; margin: 14px 0 6px; line-height: 1.3; }
+.aui-md-h3 { font-family: var(--font-heading); font-size: 1.1rem; font-weight: 900; margin: 12px 0 4px; line-height: 1.3; }
+.aui-md-h4 { font-family: var(--font-heading); font-size: 1rem; font-weight: 900; margin: 10px 0 4px; line-height: 1.3; }
+.aui-md-h5 { font-family: var(--font-heading); font-size: 0.95rem; font-weight: 900; margin: 8px 0 4px; }
+.aui-md-h6 { font-family: var(--font-heading); font-size: 0.9rem; font-weight: 900; margin: 8px 0 4px; }
+
+.aui-md-p { margin: 4px 0; line-height: 1.65; }
+.aui-md-p:first-child { margin-top: 0; }
+.aui-md-p:last-child { margin-bottom: 0; }
+
+.aui-md-a {
+  color: #8B5CF6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+}
+.aui-md-a:hover { color: #7c3aed; }
+
+.aui-md-strong { font-weight: 700; }
+
+/* Inline code */
+.aui-md-inline-code {
+  background: #f0f0f0;
+  border: 1px solid #d4d4d4;
+  padding: 2px 6px;
+  font-size: 0.875em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  border-radius: 0;
+}
+
+/* Code blocks */
+.aui-md-pre {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 0 var(--border);
+  padding: 14px 18px;
+  margin: 10px 0;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.7;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  white-space: pre;
+  position: relative;
+}
+.aui-md-pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* SQL keyword colors */
+.aui-md-pre .hljs-keyword { color: #c792ea; }
+.aui-md-pre .hljs-string { color: #c3e88d; }
+.aui-md-pre .hljs-comment { color: #676e95; }
+.aui-md-pre .hljs-type { color: #ffcb6b; }
+
+/* Blockquote */
+.aui-md-blockquote {
+  border-left: 4px solid var(--primary);
+  background: #fffbeb;
+  padding: 10px 16px;
+  margin: 10px 0;
+  font-style: italic;
+  color: #555;
+  box-shadow: 2px 2px 0 0 #eee;
+}
+
+/* Tables */
+.aui-md-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  border: 2px solid var(--border);
+  box-shadow: 3px 3px 0 0 #eee;
+}
+.aui-md-th {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid var(--border);
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-heading);
+}
+.aui-md-td {
+  border: 1px solid #d4d4d4;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.aui-md-tr:nth-child(even) .aui-md-td {
+  background: #fafafa;
+}
+
+/* Lists */
+.aui-md-ul, .aui-md-ol {
+  margin: 4px 0;
+  padding-left: 24px;
+  line-height: 1.65;
+}
+.aui-md-ul { list-style: disc; }
+.aui-md-ol { list-style: decimal; }
+
+/* Horizontal rule */
+.aui-md-hr {
+  border: none;
+  border-top: 2px solid var(--border);
+  margin: 12px 0;
+}
+
+/* -- NeoBrutalism scrollbar (shared by Knowledge panels) -- */
+.nb-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) #f0f0f0;
+}
+.nb-scrollbar::-webkit-scrollbar { width: 12px; height: 12px; }
+.nb-scrollbar::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-left: 2px solid var(--border);
+}
+.nb-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border: 2px solid var(--border);
+  min-height: 40px;
+}
+.nb-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-hover);
+}
+.nb-scrollbar::-webkit-scrollbar-corner { background: #f0f0f0; }
+
+/* Knowledge page utilities */
+.dot-bg {
+  background-image: radial-gradient(circle, #d4d4d4 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.scrollbar-hide::-webkit-scrollbar { width: 6px; height: 0; }
+.scrollbar-hide::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-hide::-webkit-scrollbar-thumb { background: transparent; }
+.truncate-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.tab-shrink {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bubble-wrap {
+  max-width: 75%;
+  min-width: 0;
+  overflow: hidden;
+}
+.bubble-wrap > div:last-child {
+  overflow: hidden;
+  word-break: break-word;
+  min-width: 0;
 }

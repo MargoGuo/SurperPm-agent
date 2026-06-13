@@ -1,11 +1,14 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { Button } from '@/components/retroui/Button'
+import { Badge } from '@/components/retroui/Badge'
+import { Text } from '@/components/retroui/Text'
 
 const navItems = [
-  { to: '/setup', label: 'Setup' },
-  { to: '/config', label: 'Config' },
-  { to: '/knowledge', label: 'Knowledge' },
   { to: '/goal', label: 'Goal' },
+  { to: '/knowledge', label: 'Knowledge' },
+  { to: '/config', label: 'Config' },
+  { to: '/setup', label: 'Profile' },
 ]
 
 export default function Layout() {
@@ -24,19 +27,20 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
-      <nav className="border-b bg-white px-6 py-3 flex items-center gap-6 sticky top-0 z-10">
-        <span className="font-bold text-lg">⚡ SuperPmAgent</span>
+    <div className="h-screen flex flex-col bg-background text-foreground">
+      <nav className="border-b-2 bg-card px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-6 sticky top-0 z-10">
+        <Text as="h3" className="font-bold shrink-0">SuperPmAgent</Text>
+
         <div className="flex gap-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                `px-3 py-1.5 border-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-gray-900 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    ? 'bg-primary text-primary-foreground border-border'
+                    : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 }`
               }
             >
@@ -48,23 +52,27 @@ export default function Layout() {
         <div className="ml-auto flex items-center gap-3">
           <button
             onClick={copyRepo}
-            className="text-xs text-gray-500 hover:text-gray-900 font-mono"
+            className="cursor-pointer"
             title="点击复制仓库地址"
           >
-            📦 {user.repo}
+            <Badge variant="outline" className="font-mono cursor-pointer">{user.repo}</Badge>
           </button>
-          <div className="w-px h-4 bg-gray-300" />
+          <div className="w-px h-4 bg-border" />
+          {user.avatar_url && (
+            <img
+              src={user.avatar_url}
+              alt={user.username}
+              className="w-6 h-6 rounded-full border border-border object-cover shrink-0"
+            />
+          )}
           <span className="text-sm font-medium">@{user.username}</span>
-          <button
-            onClick={logout}
-            className="text-xs text-gray-500 hover:text-gray-900"
-            title="清 cookie + 跳 /login(撤销 PAT 请去 GitHub)"
-          >
+          <Button variant="ghost" size="sm" onClick={logout}>
             退出
-          </button>
+          </Button>
         </div>
       </nav>
-      <main className="flex-1">
+
+      <main className="flex-1 min-h-0 overflow-auto nb-scrollbar flex flex-col">
         <Outlet />
       </main>
     </div>

@@ -5,9 +5,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # GitHub
+    # GitHub OAuth
+    github_oauth_client_id: str = ""
+    github_oauth_client_secret: str = ""
+    github_oauth_redirect_uri: str = "http://localhost:8000/api/auth/github/callback"
+
+    # GitHub PAT (fallback)
     github_token: str = ""
     github_repo: str = ""  # e.g. "myteam/claude-for-SuperPmAgent-fork"
+
+    # Session
+    SuperPmAgent_secret: str = ""
 
     # Anthropic / 豆包
     anthropic_api_key: str = ""

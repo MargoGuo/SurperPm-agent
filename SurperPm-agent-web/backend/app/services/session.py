@@ -1,15 +1,13 @@
-"""Session cookie helpers — itsdangerous-signed payloads.
-
-We don't store anything server-side. The cookie itself is the session.
-itsdangerous prevents tampering (HMAC-signed); we still treat the contents
-as untrusted on read and validate before use.
-
-TODO (W2): rotate _SECRET to one loaded from env (`SuperPmAgent_SECRET`).
-"""
+"""Session cookie helpers — itsdangerous-signed payloads."""
+import logging
 from itsdangerous import BadSignature, URLSafeSerializer
 
-# W1 末 dev secret. W2 reads from env.
-_SECRET = "SuperPmAgent-dev-secret-change-in-prod"
+from app.config import settings
+
+_SECRET = settings.SuperPmAgent_secret or "SuperPmAgent-dev-secret-change-in-prod"
+if not settings.SuperPmAgent_secret:
+    logging.warning("SuperPmAgent_SECRET not set — using dev secret. Set it in .env for production.")
+
 _serializer = URLSafeSerializer(_SECRET, salt="SuperPmAgent.session")
 
 

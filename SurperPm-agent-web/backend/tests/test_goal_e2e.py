@@ -5,12 +5,16 @@ and tests the full submit → list → get flow without touching .env.
 """
 import os
 import subprocess
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.services.agent import AgentResult
+
+
+async def _mock_agent(**kwargs) -> AgentResult:
+    return AgentResult()
 
 
 @pytest.fixture()
@@ -47,10 +51,10 @@ def test_client(target_repo):
 
 def test_submit_returns_run_id(test_client):
     """POST /api/goal/submit should return a run_id and status."""
-    with patch("app.services.agent.run_goal_agent", new_callable=AsyncMock) as mock_run:
-        mock_run.return_value = AgentResult()
-
-        r = test_client.post("/api/goal/submit", json={"text": "add .gitignore for Python"})
+    with patch("app.services.goal_runner.run_goal_agent", _mock_agent):
+        r = test_client.post(
+            "/api/goal/submit", json={"text": "add .gitignore for Python", "sandbox": "local"}
+        )
         assert r.status_code == 201
         body = r.json()
         assert "id" in body
@@ -60,10 +64,10 @@ def test_submit_returns_run_id(test_client):
 
 def test_list_contains_submitted_goal(test_client):
     """GET /api/goal/list should include previously submitted goals."""
-    with patch("app.services.agent.run_goal_agent", new_callable=AsyncMock) as mock_run:
-        mock_run.return_value = AgentResult()
-
-        test_client.post("/api/goal/submit", json={"text": "add .editorconfig"})
+    with patch("app.services.goal_runner.run_goal_agent", _mock_agent):
+        test_client.post(
+            "/api/goal/submit", json={"text": "add .editorconfig", "sandbox": "local"}
+        )
         r = test_client.get("/api/goal/list")
         assert r.status_code == 200
         runs = r.json()
@@ -73,10 +77,10 @@ def test_list_contains_submitted_goal(test_client):
 
 def test_get_single_run(test_client):
     """GET /api/goal/{id} should return the run details."""
-    with patch("app.services.agent.run_goal_agent", new_callable=AsyncMock) as mock_run:
-        mock_run.return_value = AgentResult()
-
-        submit_resp = test_client.post("/api/goal/submit", json={"text": "fix typo in readme"})
+    with patch("app.services.goal_runner.run_goal_agent", _mock_agent):
+        submit_resp = test_client.post(
+            "/api/goal/submit", json={"text": "fix typo in readme", "sandbox": "local"}
+        )
         run_id = submit_resp.json()["id"]
 
         r = test_client.get(f"/api/goal/{run_id}")

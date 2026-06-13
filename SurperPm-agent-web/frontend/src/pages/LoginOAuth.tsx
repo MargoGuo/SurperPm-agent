@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Search } from 'lucide-react'
-import { api, Repo } from '../api/client'
+import { api, Repo } from '@/api/client'
 import { Button } from '@/components/retroui/Button'
 import { Input } from '@/components/retroui/Input'
 import { Label } from '@/components/retroui/Label'
