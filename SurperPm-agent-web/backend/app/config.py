@@ -36,5 +36,11 @@ class Settings(BaseSettings):
     plugin_repo_path: str = ""  # path to claude-for-SuperPmAgent/SuperPmAgent-core
     target_repo_path: str = ""  # path to target git repo for goal execution
 
+    # Database
+    database_url: str = "sqlite+aiosqlite:///./data/SuperPmAgent.db"
+
+    # Encryption key for secrets (Fernet)
+    secret_key: str = ""
+
 
 settings = Settings()
