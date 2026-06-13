@@ -73,9 +73,12 @@ export const api = {
       ),
   },
   setup: {
-    state: () => request<{ completed: boolean; step: number }>('/setup/state'),
+    state: () => request<{ completed: boolean; step?: number; auto_detected_languages: Record<string, number>; answers: Record<string, unknown> | null }>('/setup/state'),
+    teamProfile: () => request<any>('/setup/team-profile'),
     saveStep: (data: unknown) =>
       request('/setup/save-step', { method: 'POST', body: JSON.stringify(data) }),
+    updateProfile: (data: unknown) =>
+      request('/setup/update-profile', { method: 'PUT', body: JSON.stringify(data) }),
     finish: () => request<{ ok: boolean; cli: string }>('/setup/finish', { method: 'POST' }),
   },
   knowledge: {
