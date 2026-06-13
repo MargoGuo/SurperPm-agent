@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import auth as auth_routes
+from app.routes import chat as chat_routes
 from app.routes import config as config_routes
 from app.routes import goal as goal_routes
 from app.routes import knowledge as knowledge_routes
@@ -38,6 +39,7 @@ app.include_router(setup_routes.router, prefix="/api/setup", tags=["setup"])
 app.include_router(config_routes.router, prefix="/api/config", tags=["config"])
 app.include_router(knowledge_routes.router, prefix="/api/knowledge", tags=["knowledge"])
 app.include_router(goal_routes.router, prefix="/api/goal", tags=["goal"])
+app.include_router(chat_routes.router, prefix="/api/chat", tags=["chat"])
 
 
 @app.get("/")
