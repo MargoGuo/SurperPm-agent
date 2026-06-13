@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api";
+const BASE = "/api";
 
 function createApi() {
   async function request(method: string, path: string, body?: unknown) {
@@ -8,6 +8,12 @@ function createApi() {
       credentials: "include",
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
+    if (res.status === 401) {
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+      throw new Error("unauthorized");
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail ?? `${res.status} ${res.statusText}`);

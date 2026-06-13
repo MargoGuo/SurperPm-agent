@@ -3,6 +3,7 @@ import { create } from "zustand";
 interface ExecutionProgress {
   executionId: string;
   goalId: number;
+  tokenUsed: number;
   step: string;
   detail: string;
 }

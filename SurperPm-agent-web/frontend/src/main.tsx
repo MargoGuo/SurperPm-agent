@@ -48,7 +48,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
             </Route>
-            <Route path="/" element={<Navigate to="/goal" replace />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

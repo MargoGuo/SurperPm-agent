@@ -1,6 +1,5 @@
 /**
- * API client — all backend calls go through here.
- * Vite dev proxies /api → http://localhost:8000.
+ * @deprecated Use `@/lib/api` for API calls. This file is kept only for type exports (User, Repo, etc.).
  */
 
 export class ApiError extends Error {
@@ -60,9 +59,21 @@ export interface GoalRun {
   cost_usd: number
 }
 
+export interface Workspace {
+  id: string
+  name: string
+  slug: string
+  repo_url?: string
+}
+
 export const api = {
   auth: {
     me: () => request<User>('/auth/me'),
+    patRepos: (pat: string) =>
+      request<{ username: string; avatar_url: string; repos: Repo[] }>(
+        '/auth/pat/repos',
+        { method: 'POST', body: JSON.stringify({ pat }) },
+      ),
     login: (pat: string, repo: string, anthropic_key?: string) =>
       request<{ ok: boolean; username: string; repo: string; profile_missing: boolean }>(
         '/auth/login',
@@ -90,13 +101,16 @@ export const api = {
     finish: (data?: { answers: Record<string, unknown>; auto_detected_languages: Record<string, number> }) =>
       request<{ ok: boolean }>('/setup/finish', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   },
+  workspace: {
+    list: () => request<Workspace[]>('/workspaces'),
+    create: (data: { name: string; slug: string; repo_url?: string }) =>
+      request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(data) }),
+  },
   knowledge: {
     tree: () => request('/knowledge/tree'),
     file: (path: string) => request(`/knowledge/file?path=${encodeURIComponent(path)}`),
     saveFile: (data: unknown) =>
       request('/knowledge/file', { method: 'PUT', body: JSON.stringify(data) }),
-    chat: (data: unknown) =>
-      request('/knowledge/session/chat', { method: 'POST', body: JSON.stringify(data) }),
   },
   goal: {
     submit: (data: { goal_text: string }) =>

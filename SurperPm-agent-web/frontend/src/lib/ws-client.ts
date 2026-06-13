@@ -4,6 +4,7 @@ export class WSClient {
   private ws: WebSocket | null = null;
   private handlers = new Map<string, EventHandler[]>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectDelay = 1000;
   private url: string;
 
   constructor(workspaceId: string) {
@@ -14,6 +15,10 @@ export class WSClient {
 
   private connect() {
     this.ws = new WebSocket(this.url);
+
+    this.ws.onopen = () => {
+      this.reconnectDelay = 1000;
+    };
 
     this.ws.onmessage = (ev) => {
       try {
@@ -26,7 +31,8 @@ export class WSClient {
     };
 
     this.ws.onclose = () => {
-      this.reconnectTimer = setTimeout(() => this.connect(), 3000);
+      this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelay);
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
     };
 
     this.ws.onerror = () => {

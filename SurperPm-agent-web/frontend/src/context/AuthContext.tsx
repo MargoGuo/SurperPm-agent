@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { api, User } from '@/api/client'
+import { api } from '@/lib/api'
+import type { User } from '@/api/client'
 
 interface AuthState {
   user: User | null
@@ -21,7 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(() => {
     setLoading(true)
-    api.auth.me()
+    api.get<User>('/auth/me')
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setLoading(false))
@@ -30,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(refresh, [refresh])
 
   const logout = useCallback(async () => {
-    await api.auth.logout().catch(() => {})
+    await api.post('/auth/logout').catch(() => {})
     setUser(null)
   }, [])
 
