@@ -1,32 +1,45 @@
 # Plugin Index
 
+Authoritative skill/command index for the `find` skill. Keep in sync with the
+actual `SuperPmAgent-*/skills/` folders and `SuperPmAgent-*/commands/`.
+
 ## Core (`SuperPmAgent-core`)
 
-- `skills/distill` - Post-loop knowledge distillation
-- `skills/find` - Resource discovery across marketplace
-- `skills/find-extensions` - Extension prompt discovery
-- `commands/goal` - Goal entry command
-- `commands/clarify` - Clarification command
+- `commands/goal` - Goal entry and delivery orchestration
+- `commands/clarify` - Clarify a PM request into a session IntentSpec
+- `commands/distill` - Manual distill modes (`summary`, `dream`)
+- `skills/find` - Resource discovery (skills / domain / learnings / profiles / extensions)
+- `skills/find-extensions` - Extension prompt discovery (hook-invoked)
+- `skills/distill` - Post-loop knowledge distillation into `knowledge/domain/`
+- `hooks/` - `pre-tool-use.py`, `stop.py`
 
 ## IO (`SuperPmAgent-io`)
 
-- `skills/input/normalize-url` - Generic URL normalization fallback
-- `skills/input/normalize-feishu-doc` - Feishu document normalization
-- `skills/input/normalize-bilibili-video` - Bilibili video reference normalization
-- `skills/input/normalize-douyin-video` - Douyin video reference normalization
-- `skills/output/export-feishu-prd` - Feishu PRD artifact registration
-- `skills/output/export-ppt` - PPT artifact registration
+- `skills/normalize-url` - Generic URL normalization fallback
+- `skills/normalize-feishu-doc` - Feishu/Lark document normalization
+- `skills/normalize-feishu-sheet` - Feishu/Lark sheet/bitable normalization
+- `skills/normalize-bilibili-video` - Bilibili video reference normalization
+- `skills/normalize-douyin-video` - Douyin video reference normalization
+- `skills/analyze-reference-material` - Turn fetched references into clarify-ready insights
+- `skills/export-feishu-prd` - Feishu PRD artifact registration
+- `skills/export-ppt` - PPT artifact registration
+- `contracts/IO-PROTOCOL.md` - Session input/output protocol
 
 ## Coding (`SuperPmAgent-coding`)
 
-- `skills/coding` - General coding workflow
-- `skills/debugger` - Debug investigation
-- `skills/repo-explorer` - Repository exploration
-- `skills/run-tests` - Test execution
-- `skills/submit-pr` - PR submission
+- `skills/repo-explorer` - Read-only repository exploration and locate report
+- `skills/coding` - Focused implementation after locate evidence
+- `skills/run-tests` - Test/lint/build selection and failure capture
+- `skills/debugger` - Bounded root-cause investigation
+- `skills/acceptance-review` - Final acceptance/scope gate before PR
+- `skills/submit-pr` - Branch, commit, and PR submission
+- `skills/code-context` - Optional deep locate via local CLI (no MCP)
+- `skills/fixes/` - Distilled CI-failure self-heal patterns (auto-grow)
+- `tools/code_context.py` - Local code-context CLI
 
 ## Business (`SuperPmAgent-business`)
 
-- `skills/add-api-endpoint` - Add API endpoint pattern
-- `skills/add-db-field` - Add database field pattern
-- `skills/add-ui-form` - Add UI form pattern
+- `skills/add-db-field` - Persistent field with cross-stack propagation
+- `skills/add-api-endpoint` - New backend route / response contract
+- `skills/add-ui-form` - New or changed user input in an existing form
+- `skills/gen-feishu-design` - Feishu requirements → design + task artifacts

@@ -27,7 +27,8 @@
 
 ## Reporting Table (measured)
 
-Last reviewed: **2026-06-13** (rounds 001–006 + structural probe).
+Last reviewed: **2026-06-13** (rounds 001–094 + structural probe +
+generalization soaks).
 
 | Group | Cases | Pass | Locate Hit | Test Success | Avg Time | Avg Tokens | Interventions | Distill Yield |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -35,7 +36,13 @@ Last reviewed: **2026-06-13** (rounds 001–006 + structural probe).
 | SuperPmAgent Coding (Track A) | 8 | 5 | — | 5 | — | — | 0 | 1 |
 | SuperPmAgent Cross-Repo (XR smoke) | 4 | 3 | — | n/a | — | — | 0 | 0 |
 | SuperPmAgent Web Contract | 0 | 0 | — | — | — | — | 0 | 0 |
+| SuperPmAgent Diverse-20 (DV latest) | 20 | 20 | — | — | — | — | 0 | 0 |
+| SuperPmAgent App-50 (AP latest reviewed) | 49 | 36 | — | — | — | — | 0 | 0 |
 | SuperPmAgent Distill | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+See [`conduit-results.md`](conduit-results.md) for the sanitized Conduit/XC/WEB
+evidence and [`generalization-results.md`](generalization-results.md) for the
+DV/AP run summary and raw-artifact publication policy.
 
 ### Track A grading (round-005, primary evidence)
 
@@ -47,6 +54,14 @@ Last reviewed: **2026-06-13** (rounds 001–006 + structural probe).
 | L1-01 | round-004 | fail | `dependency_changed` (jsdom pollution) — fixed in Phase D round 005. |
 
 Earlier rounds (001–003): L1/L2 **needs_review** with git changes; L3 **no_changes** (gate). Counted as partial until round-005 guardrails.
+
+Conduit optimization signals are summarized in
+[`conduit-results.md`](conduit-results.md). Important examples:
+
+- `L1-01` exposed dependency/lockfile pollution, leading to explicit lockfile
+  hygiene gates.
+- `L2-01` validated the cross-stack field propagation path.
+- `L3-03` validated the contradiction gate and no-code clarification behavior.
 
 ### Track B XR smoke (round-006)
 
@@ -63,6 +78,18 @@ Earlier rounds (001–003): L1/L2 **needs_review** with git changes; L3 **no_cha
 | WEB-01..04 | **pass** |
 
 Cumulative Track A (rounds 005–008): **8/8** graded passes on last run per case type; L3 gate clean on round-008.
+
+### Generalization soaks (rounds 014-094)
+
+| Suite | Attempts | Distinct Cases Reviewed | Auto Pass | Needs Review | Fail | Infra Error | Missing |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `diverse-20` | 20 | 20 | 20 | 0 | 0 | 0 | 0 |
+| `app-50` | 59 | 49 | 44 | 11 | 3 | 1 | 1 |
+| `app-50` latest reviewed state | 49 | 49 | 36 | 10 | 3 | 0 | 1 |
+
+The app-50 failures were useful optimization signals rather than hidden wins:
+AP-13, AP-14, and AP-22 exposed setup-only lockfile churn. AP-47 had no
+sanitized latest review summary available and is reported as missing.
 
 ### Round-007 (2026-06-13)
 
