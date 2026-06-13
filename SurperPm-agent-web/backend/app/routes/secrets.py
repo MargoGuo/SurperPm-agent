@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.database import get_session
+from app.routes.deps import require_auth
 from app.models.secret import Secret
 from app.services.crypto import decrypt, encrypt
 
@@ -30,6 +31,7 @@ class SecretOut(BaseModel):
 async def list_secrets(
     workspace_id: str,
     session: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_auth),
 ) -> list[SecretOut]:
     """List all secrets for a workspace. Values are redacted."""
     stmt = select(Secret).where(Secret.workspace_id == workspace_id)
@@ -52,6 +54,7 @@ async def create_secret(
     workspace_id: str,
     body: SecretCreate,
     session: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_auth),
 ):
     """Create a new secret. The value is encrypted before storage."""
     encrypted_value = encrypt(body.value)
@@ -78,6 +81,7 @@ async def delete_secret(
     workspace_id: str,
     secret_id: int,
     session: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_auth),
 ):
     """Delete a secret by ID."""
     stmt = select(Secret).where(
@@ -96,6 +100,7 @@ async def reveal_secret(
     workspace_id: str,
     secret_id: int,
     session: AsyncSession = Depends(get_session),
+    _user: dict = Depends(require_auth),
 ):
     """Reveal the decrypted value of a single secret."""
     stmt = select(Secret).where(

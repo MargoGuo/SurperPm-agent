@@ -1,19 +1,21 @@
 """Knowledge — tree + file read/write + session chat.
 
-MVP: operates on local filesystem via KNOWLEDGE_ROOT env var.
-Defaults to ./knowledge/ relative to the backend working directory.
+Reads from the claude-for-knowledge repo clone (KNOWLEDGE_REPO_PATH config).
+Falls back to ./knowledge/ relative to the backend working directory.
 """
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from app.config import settings
+from app.routes.deps import require_auth
 
 router = APIRouter()
 
-KNOWLEDGE_ROOT = Path(os.environ.get("KNOWLEDGE_ROOT", "knowledge"))
+KNOWLEDGE_ROOT = Path(settings.knowledge_repo_path) if settings.knowledge_repo_path else Path("knowledge")
 
 
 def _ensure_root() -> Path:
@@ -35,14 +37,14 @@ def _build_tree(p: Path, rel: Path) -> dict:
 
 
 @router.get("/tree")
-async def tree() -> dict:
+async def tree(_user: dict = Depends(require_auth)) -> dict:
     """Return the knowledge/ directory tree."""
     root = _ensure_root()
     return _build_tree(root, Path("knowledge"))
 
 
 @router.get("/file")
-async def file(path: str) -> dict:
+async def file(path: str, _user: dict = Depends(require_auth)) -> dict:
     """Read a single file by path."""
     target = _resolve(path)
     if not target.is_file():
@@ -56,7 +58,7 @@ class FilePayload(BaseModel):
 
 
 @router.put("/file")
-async def update_file(payload: FilePayload) -> dict:
+async def update_file(payload: FilePayload, _user: dict = Depends(require_auth)) -> dict:
     """Write a file under knowledge/."""
     target = _resolve(payload.path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -69,7 +71,7 @@ class NewSessionPayload(BaseModel):
 
 
 @router.post("/session/new")
-async def new_session(payload: NewSessionPayload) -> dict:
+async def new_session(payload: NewSessionPayload, _user: dict = Depends(require_auth)) -> dict:
     """Create a new session folder under knowledge/sessions/."""
     root = _ensure_root()
     session_dir = root / "sessions" / payload.name
@@ -97,7 +99,7 @@ class ChatPayload(BaseModel):
 
 
 @router.post("/session/chat")
-async def session_chat(payload: ChatPayload) -> dict:
+async def session_chat(payload: ChatPayload, _user: dict = Depends(require_auth)) -> dict:
     """Append a chat turn to the session's chat.jsonl and return AI reply."""
     root = _ensure_root()
     session_dir = root / "sessions" / payload.session

@@ -5,9 +5,10 @@ from sqlmodel import select
 from pydantic import BaseModel
 
 from app.database import get_session
+from app.routes.deps import require_auth
 from app.models.workspace import Workspace
 from app.services.crypto import encrypt
-from app.services.event_bus import bus
+from app.services.event_bus import bus, WORKSPACE_CREATED
 from app.services.ssh_keygen import generate_ssh_keypair
 
 router = APIRouter()
@@ -23,12 +24,12 @@ class WorkspaceUpdate(BaseModel):
     knowledge_repo_url: str | None = None
 
 @router.get("")
-async def list_workspaces(session: AsyncSession = Depends(get_session)):
+async def list_workspaces(session: AsyncSession = Depends(get_session), _user: dict = Depends(require_auth)):
     result = await session.execute(select(Workspace))
     return result.scalars().all()
 
 @router.post("", status_code=201)
-async def create_workspace(body: WorkspaceCreate, session: AsyncSession = Depends(get_session)):
+async def create_workspace(body: WorkspaceCreate, session: AsyncSession = Depends(get_session), _user: dict = Depends(require_auth)):
     # Generate SSH keypair for the new workspace
     public_key, private_key = generate_ssh_keypair()
     private_key_enc = encrypt(private_key)
@@ -43,18 +44,18 @@ async def create_workspace(body: WorkspaceCreate, session: AsyncSession = Depend
     session.add(ws)
     await session.commit()
     await session.refresh(ws)
-    await bus.emit("workspace_created", {"workspace_id": ws.id, "name": ws.name})
+    await bus.emit(WORKSPACE_CREATED, {"workspace_id": ws.id, "name": ws.name})
     return ws
 
 @router.get("/{workspace_id}")
-async def get_workspace(workspace_id: str, session: AsyncSession = Depends(get_session)):
+async def get_workspace(workspace_id: str, session: AsyncSession = Depends(get_session), _user: dict = Depends(require_auth)):
     ws = await session.get(Workspace, workspace_id)
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
     return ws
 
 @router.patch("/{workspace_id}")
-async def update_workspace(workspace_id: str, body: WorkspaceUpdate, session: AsyncSession = Depends(get_session)):
+async def update_workspace(workspace_id: str, body: WorkspaceUpdate, session: AsyncSession = Depends(get_session), _user: dict = Depends(require_auth)):
     ws = await session.get(Workspace, workspace_id)
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
@@ -67,7 +68,7 @@ async def update_workspace(workspace_id: str, body: WorkspaceUpdate, session: As
     return ws
 
 @router.delete("/{workspace_id}", status_code=204)
-async def delete_workspace(workspace_id: str, session: AsyncSession = Depends(get_session)):
+async def delete_workspace(workspace_id: str, session: AsyncSession = Depends(get_session), _user: dict = Depends(require_auth)):
     ws = await session.get(Workspace, workspace_id)
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
@@ -76,7 +77,7 @@ async def delete_workspace(workspace_id: str, session: AsyncSession = Depends(ge
 
 
 @router.get("/{workspace_id}/ssh-public-key")
-async def get_ssh_public_key(workspace_id: str, session: AsyncSession = Depends(get_session)):
+async def get_ssh_public_key(workspace_id: str, session: AsyncSession = Depends(get_session), _user: dict = Depends(require_auth)):
     """Return the SSH public key for a workspace (for user to copy)."""
     ws = await session.get(Workspace, workspace_id)
     if not ws:
