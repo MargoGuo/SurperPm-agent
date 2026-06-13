@@ -13,7 +13,7 @@ import Goal from './pages/Goal'
 import Knowledge from './pages/Knowledge'
 import Login from './pages/Login'
 import LoginOAuth from './pages/LoginOAuth'
-import Setup from './pages/Setup'
+import SetupNew from './pages/SetupNew'
 
 import './index.css'
 
@@ -27,7 +27,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<Navigate to="/goal" replace />} />
-              <Route path="/setup" element={<Setup />} />
+              <Route path="/setup" element={<SetupNew />} />
               <Route path="/config" element={<Config />} />
               <Route path="/knowledge" element={<Knowledge />} />
               <Route path="/goal" element={<Goal />} />

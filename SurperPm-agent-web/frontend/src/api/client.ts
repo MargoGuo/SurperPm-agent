@@ -43,6 +43,13 @@ export interface Repo {
   stars: number
 }
 
+export interface TeamProfile {
+  team_name: string
+  description: string
+  members: { login: string; avatar_url: string }[]
+  languages: Record<string, number>
+}
+
 export interface GoalRun {
   id: string
   status: 'running' | 'done' | 'failed'
@@ -73,13 +80,15 @@ export const api = {
       ),
   },
   setup: {
-    state: () => request<{ completed: boolean; step?: number; auto_detected_languages: Record<string, number>; answers: Record<string, unknown> | null }>('/setup/state'),
-    teamProfile: () => request<any>('/setup/team-profile'),
-    saveStep: (data: unknown) =>
-      request('/setup/save-step', { method: 'POST', body: JSON.stringify(data) }),
-    updateProfile: (data: unknown) =>
-      request('/setup/update-profile', { method: 'PUT', body: JSON.stringify(data) }),
-    finish: () => request<{ ok: boolean; cli: string }>('/setup/finish', { method: 'POST' }),
+    state: () =>
+      request<{ completed: boolean; auto_detected_languages: Record<string, number>; answers: Record<string, unknown> | null }>(
+        '/setup/state',
+      ),
+    teamProfile: () => request<TeamProfile>('/setup/team-profile'),
+    updateProfile: (data: { answers: Record<string, unknown> }) =>
+      request<{ ok: boolean }>('/setup/update-profile', { method: 'POST', body: JSON.stringify(data) }),
+    finish: (data?: { answers: Record<string, unknown>; auto_detected_languages: Record<string, number> }) =>
+      request<{ ok: boolean }>('/setup/finish', { method: 'POST', body: JSON.stringify(data ?? {}) }),
   },
   knowledge: {
     tree: () => request('/knowledge/tree'),
