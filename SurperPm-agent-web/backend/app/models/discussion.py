@@ -13,4 +13,6 @@ class Discussion(SQLModel, table=True):
     goal_id: int | None = Field(default=None, foreign_key="goal.id")
     role: str = Field(nullable=False)  # user | agent | system
     content: str = Field(nullable=False)
+    author: str | None = Field(default=None)
+    parent_id: int | None = Field(default=None, foreign_key="discussion.id")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
