@@ -27,6 +27,7 @@ The protocol supports these input classes:
 - `text`: plain PM request text.
 - `url`: generic webpage or issue link.
 - `feishu_doc`: Feishu/Lark document link.
+- `feishu_sheet`: Feishu/Lark spreadsheet, table, or bitable link.
 - `bilibili_video`: Bilibili video link.
 - `douyin_video`: Douyin video link.
 - `attachment_ref`: explicit supporting file or asset reference.
@@ -47,6 +48,12 @@ clarity consumes it.
   "summary": "Short extracted or user-supplied summary",
   "raw_request": "Original PM wording, if any",
   "user_context": "What the PM said they want to reference from this source",
+  "content_access": "link_only",
+  "capture_method": "link-plus-user-context",
+  "content_ref": null,
+  "table_ref": null,
+  "analysis_ref": null,
+  "evidence_policy": "Derived artifacts are supporting evidence and require PM confirmation before they become decisions.",
   "extracted_points": [
     "Point one",
     "Point two"
@@ -64,7 +71,7 @@ clarity consumes it.
 }
 ```
 
-Allowed source_type values: `text`, `url`, `feishu_doc`, `bilibili_video`, `douyin_video`, `attachment_ref`.
+Allowed source_type values: `text`, `url`, `feishu_doc`, `feishu_sheet`, `bilibili_video`, `douyin_video`, `attachment_ref`.
 
 Required fields that all normalized input records must retain:
 
@@ -76,6 +83,12 @@ Required fields that all normalized input records must retain:
 - `summary`
 - `extracted_points`
 - `risks`
+- `content_access`
+- `capture_method`
+- `content_ref`
+- `table_ref`
+- `analysis_ref`
+- `evidence_policy`
 - `provider_metadata`
 
 `provider_metadata` should preserve provider-specific details such as Feishu
@@ -83,8 +96,23 @@ document tokens, shared-browser capture strategy, and follow-up requirements.
 
 Allowed values:
 
-- `provider_metadata.capture_method`: `link_only`, `link-plus-user-context`, `link-plus-summary`, `fetched_text`
-- `provider_metadata.content_access`: `link_only`, `pm_summary`, `transcript_available`, `fetched_text`
+- `content_access`: `link_only`, `pm_summary`, `fetched_text`, `fetched_table`, `partial_fetch`
+- `capture_method`: `link_only`, `link-plus-user-context`, `link-plus-summary`, `fetched_text`, `lark-doc`, `lark-sheet`
+- `provider_metadata.capture_method`: `link_only`, `link-plus-user-context`, `link-plus-summary`, `fetched_text`, `lark-doc`, `lark-sheet`
+- `provider_metadata.content_access`: `link_only`, `pm_summary`, `fetched_text`, `fetched_table`, `partial_fetch`
+
+Definitions:
+
+- `link_only`
+  - Only the link is registered. No readable content.
+- `pm_summary`
+  - The PM manually provided a summary.
+- `fetched_text`
+  - Text content was fetched from a document or page.
+- `fetched_table`
+  - Tabular content was fetched from a sheet or table.
+- `partial_fetch`
+  - Only part of the content was fetched due to limits, permissions, or size.
 
 ## Shared Browser / Link-plus-user-context
 
@@ -145,6 +173,9 @@ Recommended layout:
 attachments/
   sources/
     <slug>.json
+    <slug>.content.md
+    <slug>.table.md
+    <slug>.analysis.md
   exports/
     <slug>.json
 ```
@@ -160,6 +191,12 @@ Recommended `attachments/sources/<slug>.json` payload:
   "summary": "Current draft for phone-field request",
   "raw_request": "Please organize this Feishu doc into an executable requirement session.",
   "user_context": "The PM says the doc describes the desired registration-flow changes.",
+  "content_access": "fetched_text",
+  "capture_method": "lark-doc",
+  "content_ref": "attachments/sources/feishu-doc-phone-field.content.md",
+  "table_ref": null,
+  "analysis_ref": "attachments/sources/feishu-doc-phone-field.analysis.md",
+  "evidence_policy": "analysis_ref is derived evidence only; PM confirmation is required before decisions.md records it.",
   "captured_at": "2026-06-13Z",
   "extracted_points": [
     "Need backend and frontend changes"
@@ -170,7 +207,7 @@ Recommended `attachments/sources/<slug>.json` payload:
   "provider_metadata": {
     "provider": "feishu",
     "resource_kind": "doc",
-    "capture_method": "link-plus-summary",
+    "capture_method": "lark-doc",
     "content_access": "fetched_text",
     "needs_followup_confirmation": true
   }
@@ -188,6 +225,12 @@ Feishu-specific example:
   "summary": "Feishu draft covering a new phone field and registration flow adjustments.",
   "raw_request": "This is our requirement doc. Please turn it into an executable requirement session.",
   "user_context": "The PM wants the registration and profile impacts reflected into the session.",
+  "content_access": "fetched_text",
+  "capture_method": "lark-doc",
+  "content_ref": "attachments/sources/user-phone-field-prd.content.md",
+  "table_ref": null,
+  "analysis_ref": "attachments/sources/user-phone-field-prd.analysis.md",
+  "evidence_policy": "analysis_ref provides candidate insights and clarify questions; it is not source of truth.",
   "extracted_points": [
     "Add a user phone field",
     "Add phone input to the registration form",
@@ -202,8 +245,46 @@ Feishu-specific example:
     "resource_kind": "doc",
     "doc_token": "xxxxx",
     "host": "example.feishu.cn",
-    "capture_method": "link-plus-summary",
+    "capture_method": "lark-doc",
     "content_access": "fetched_text",
+    "needs_followup_confirmation": true
+  }
+}
+```
+
+Feishu sheet example:
+
+```json
+{
+  "record_type": "normalized_input",
+  "source_type": "feishu_sheet",
+  "source_uri": "https://example.feishu.cn/sheets/xxxxx",
+  "title": "Competitor matrix",
+  "summary": "Feature and pricing comparison across competitors.",
+  "raw_request": "Use this sheet as the basis for our competitor analysis.",
+  "user_context": "The PM wants common and differentiating features extracted.",
+  "content_access": "fetched_table",
+  "capture_method": "lark-sheet",
+  "content_ref": null,
+  "table_ref": "attachments/sources/competitor-matrix.table.md",
+  "analysis_ref": "attachments/sources/competitor-matrix.analysis.md",
+  "evidence_policy": "Table-derived insights are candidate insights only and require PM confirmation.",
+  "extracted_points": [
+    "Competitor A and B both support bulk export"
+  ],
+  "risks": [
+    "Only visible rows from the relevant sheet tab were captured"
+  ],
+  "provider_metadata": {
+    "provider": "feishu",
+    "resource_kind": "sheet",
+    "tool": "lark-sheet",
+    "sheet_names": [
+      "Competitor Matrix"
+    ],
+    "range": "A1:H20",
+    "capture_method": "lark-sheet",
+    "content_access": "fetched_table",
     "needs_followup_confirmation": true
   }
 }
@@ -212,7 +293,8 @@ Feishu-specific example:
 Feishu execution note:
 
 - Prefer reading Feishu document content through the existing `lark-doc` skill.
-- Use `lark-shared` rules for auth and permission handling.
+- Use the auth and permission rules of the available Feishu/Lark tool or MCP integration.
+- If no such tool is available, fall back to `link_only` and ask the PM to grant access or provide a summary.
 - If fetch fails, keep the source record and mark the uncertainty in `risks`
   rather than dropping the input.
 
@@ -221,6 +303,21 @@ Rules:
 - Prefer storing links plus extracted metadata over binary payloads.
 - If a plugin must materialize content, keep it small and text-based when possible.
 - Session attachments should remain reviewable in Git.
+
+## Reference Analysis Artifact
+
+`analysis_ref` points to a markdown artifact derived from source content.
+
+It is not a PM-confirmed requirement.
+It provides candidate insights and clarification questions.
+
+## Source Of Truth Rules
+
+- `content_ref`, `table_ref`, and `analysis_ref` are supporting evidence.
+- `notes.md` is still the session-level requirement summary.
+- `decisions.md` only records PM-confirmed decisions.
+- `/goal` must not treat `analysis_ref` as confirmed requirement unless PM
+  confirmation is reflected in `decisions.md`.
 
 ## Output Classes
 
@@ -312,7 +409,8 @@ They become useful only after their meaning is reflected into the session.
 For the first implementation wave:
 
 1. Implement `feishu_doc` input normalization first.
-2. Implement `link` and generic `url` as a fallback path.
-3. Treat `bilibili_video` and `douyin_video` as `link-plus-user-context` inputs first.
-4. Implement `feishu_prd` as the first output plugin.
-5. Add `ppt` output as artifact metadata, outline, and slide plan before any binary deck generation path.
+2. Add content-aware support for `feishu_sheet` table inputs.
+3. Implement `link` and generic `url` as a fallback path.
+4. Treat `bilibili_video` and `douyin_video` as `link-plus-user-context` inputs first.
+5. Implement `feishu_prd` as the first output plugin.
+6. Add `ppt` output as artifact metadata, outline, and slide plan before any binary deck generation path.

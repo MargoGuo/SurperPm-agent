@@ -3,25 +3,28 @@
   "displayName": "Claude for SuperPmAgent",
   "description": "SuperPmAgent plugin marketplace with orchestration, IO, coding, and reusable business skills.",
   "version": "0.1.0",
+  "owner": {
+    "name": "SuperPmAgent Team"
+  },
   "plugins": [
     {
       "name": "SuperPmAgent-core",
-      "path": "./SuperPmAgent-core",
+      "source": "./SuperPmAgent-core",
       "description": "Goal orchestration, discovery, extension prompts, and distillation."
     },
     {
       "name": "SuperPmAgent-io",
-      "path": "./SuperPmAgent-io",
+      "source": "./SuperPmAgent-io",
       "description": "Input/output skills for normalizing external PM references and exporting session artifacts."
     },
     {
       "name": "SuperPmAgent-coding",
-      "path": "./SuperPmAgent-coding",
+      "source": "./SuperPmAgent-coding",
       "description": "Repository exploration, coding, testing, debugging, and PR submission skills."
     },
     {
       "name": "SuperPmAgent-business",
-      "path": "./SuperPmAgent-business",
+      "source": "./SuperPmAgent-business",
       "description": "Reusable business-change patterns."
     }
   ]

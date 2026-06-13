@@ -23,9 +23,10 @@ Use this skill when the PM provides:
 
 Prefer specialized routing when the URL is clearly:
 
-- a Feishu document -> use `input/normalize-feishu-doc`
-- a Bilibili video -> use `input/normalize-bilibili-video`
-- a Douyin video -> use `input/normalize-douyin-video`
+- a Feishu document -> use `normalize-feishu-doc`
+- a Feishu sheet, table, or bitable link -> use `normalize-feishu-sheet`
+- a Bilibili video -> use `normalize-bilibili-video`
+- a Douyin video -> use `normalize-douyin-video`
 
 ## Inputs
 
@@ -50,6 +51,12 @@ the session I/O protocol document in this repo.
   "summary": "Short extracted or user-supplied summary",
   "raw_request": "Original PM wording, if any",
   "user_context": "What the PM said they want to reference from this source",
+  "content_access": "link_only",
+  "capture_method": "link-plus-user-context",
+  "content_ref": null,
+  "table_ref": null,
+  "analysis_ref": null,
+  "evidence_policy": "External source is supporting context only; PM confirmation is required before it becomes a decision.",
   "extracted_points": [
     "Point one",
     "Point two"
@@ -68,8 +75,10 @@ the session I/O protocol document in this repo.
 
 Allowed values:
 
-- `provider_metadata.capture_method`: `link_only`, `link-plus-user-context`, `link-plus-summary`, `fetched_text`
-- `provider_metadata.content_access`: `link_only`, `pm_summary`, `transcript_available`, `fetched_text`
+- `content_access`: `link_only`, `pm_summary`, `fetched_text`, `fetched_table`, `partial_fetch`
+- `capture_method`: `link_only`, `link-plus-user-context`, `link-plus-summary`, `fetched_text`, `lark-doc`, `lark-sheet`
+- `provider_metadata.capture_method`: `link_only`, `link-plus-user-context`, `link-plus-summary`, `fetched_text`, `lark-doc`, `lark-sheet`
+- `provider_metadata.content_access`: `link_only`, `pm_summary`, `fetched_text`, `fetched_table`, `partial_fetch`
 
 ## Write Path
 
@@ -96,12 +105,14 @@ When using this skill:
 ## Classification Guidance
 
 - Use `source_type: "url"` for generic links.
-- If the link is clearly a Feishu doc, route to `input/normalize-feishu-doc`
+- If the link is clearly a Feishu doc, route to `normalize-feishu-doc`
   instead of this fallback.
+- If the link is clearly a Feishu sheet, table, or bitable, route to
+  `normalize-feishu-sheet` instead of this fallback.
 - If the link is clearly a Bilibili video, route to
-  `input/normalize-bilibili-video` instead of this fallback.
+  `normalize-bilibili-video` instead of this fallback.
 - If the link is clearly a Douyin video, route to
-  `input/normalize-douyin-video` instead of this fallback.
+  `normalize-douyin-video` instead of this fallback.
 
 ## MVP Limits
 

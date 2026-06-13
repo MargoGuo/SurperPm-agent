@@ -38,7 +38,7 @@ Read from the session in this order:
 
 The exported PRD must reflect the session, not override it.
 
-Like `output/export-ppt`, this skill produces a derived artifact. It cannot
+Like `export-ppt`, this skill produces a derived artifact. It cannot
 replace `notes.md`, and `/goal` must still consume the session rather than the
 Feishu PRD link.
 

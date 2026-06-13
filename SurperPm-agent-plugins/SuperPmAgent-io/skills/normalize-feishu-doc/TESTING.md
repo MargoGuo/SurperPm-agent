@@ -1,7 +1,7 @@
 # Normalize Feishu Doc Testing
 
 This document describes how to manually verify the MVP Feishu input flow for
-`input/normalize-feishu-doc`.
+`normalize-feishu-doc`.
 
 The purpose of the test is not to validate full Feishu parsing fidelity. The
 purpose is to verify that a Feishu document can become a usable SuperPmAgent session
@@ -60,7 +60,7 @@ Use a prompt shaped like:
 The flow should do all of the following:
 
 1. Recognize that the link is a Feishu/Lark document.
-2. Prefer `input/normalize-feishu-doc` over generic URL normalization.
+2. Prefer `normalize-feishu-doc` over generic URL normalization.
 3. Use Lark read capabilities to inspect the document when possible.
 4. Create or update a normalized source record under:
 
