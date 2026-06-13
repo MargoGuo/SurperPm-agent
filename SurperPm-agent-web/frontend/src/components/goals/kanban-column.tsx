@@ -10,10 +10,10 @@ interface KanbanColumnProps {
 
 export function KanbanColumn({ title, color, goals, workspaceId }: KanbanColumnProps) {
   return (
-    <div className={`flex flex-col rounded-lg border-t-2 ${color} bg-muted/30 p-3`}>
+    <div className={`flex flex-col border-2 border-border border-t-4 ${color} bg-muted/20 p-3`}>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-medium text-sm">{title}</h3>
-        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+        <h3 className="font-bold text-sm font-head">{title}</h3>
+        <span className="text-xs text-muted-foreground bg-background border-2 border-border px-2 py-0.5 font-bold">
           {goals.length}
         </span>
       </div>

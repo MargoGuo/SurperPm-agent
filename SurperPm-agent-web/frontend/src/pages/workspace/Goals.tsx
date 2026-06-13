@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom";
+import { Text } from "@/components/retroui/Text";
 import { KanbanBoard } from "../../components/goals/kanban-board";
 import { CreateGoalDialog } from "../../components/goals/create-goal-dialog";
 
@@ -10,7 +11,10 @@ export default function GoalsPage() {
   return (
     <div className="flex flex-col h-full p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Goals</h1>
+        <div>
+          <Text as="h2" className="text-2xl">Goals</Text>
+          <p className="text-sm text-muted-foreground mt-1">管理和跟踪项目目标</p>
+        </div>
         <CreateGoalDialog workspaceId={slug} />
       </div>
       <div className="flex-1 min-h-0">
