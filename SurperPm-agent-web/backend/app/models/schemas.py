@@ -1,4 +1,4 @@
-"""Pydantic models shared across routes."""
+"""Legacy Pydantic request/response models (non-table)."""
 from pydantic import BaseModel
 
 
