@@ -15,6 +15,16 @@ export const executionSchema = z.object({
   token_budget: z.number().nullable().optional(),
   summary: z.string().nullable().optional(),
   artifacts: z.string().nullable().optional(),
+  logs: z
+    .array(
+      z.object({
+        kind: z.string(),
+        text: z.string(),
+        tool: z.string().optional(),
+      })
+    )
+    .nullable()
+    .optional(),
   created_at: z.string(),
 });
 

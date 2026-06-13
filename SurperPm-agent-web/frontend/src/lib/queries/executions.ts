@@ -4,20 +4,16 @@ import { executionListSchema } from "../schemas/execution";
 import { parseWithFallback } from "../utils/parse-with-fallback";
 
 export const executionKeys = {
-  all: (wsId: string) => ["executions", wsId] as const,
-  list: (wsId: string) => [...executionKeys.all(wsId), "list"] as const,
-  byGoal: (wsId: string, goalId: number) =>
-    [...executionKeys.all(wsId), "goal", goalId] as const,
+  all: (goalId?: number) =>
+    goalId != null ? (["executions", goalId] as const) : (["executions"] as const),
+  list: (goalId: number) => [...executionKeys.all(goalId), "list"] as const,
 };
 
-export const executionListOptions = (workspaceId: string, goalId?: number) =>
+export const executionListOptions = (goalId: number) =>
   queryOptions({
-    queryKey: goalId
-      ? executionKeys.byGoal(workspaceId, goalId)
-      : executionKeys.list(workspaceId),
+    queryKey: executionKeys.list(goalId),
     queryFn: async () => {
-      const params = goalId ? `?goal_id=${goalId}` : "";
-      const res = await api.get(`/workspaces/${workspaceId}/executions${params}`);
+      const res = await api.get(`/goals/${goalId}/executions`);
       return parseWithFallback(executionListSchema, res, []);
     },
   });

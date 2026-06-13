@@ -1,19 +1,28 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
-import { goalListSchema } from "../schemas/goal";
+import { goalSchema, goalListSchema } from "../schemas/goal";
 import { parseWithFallback } from "../utils/parse-with-fallback";
 
 export const goalKeys = {
-  all: (wsId: string) => ["goals", wsId] as const,
-  list: (wsId: string) => [...goalKeys.all(wsId), "list"] as const,
-  detail: (wsId: string, id: number) => [...goalKeys.all(wsId), id] as const,
+  all: () => ["goals"] as const,
+  list: () => [...goalKeys.all(), "list"] as const,
+  detail: (id: number) => ["goals", "detail", id] as const,
 };
 
-export const goalListOptions = (workspaceId: string) =>
+export const goalListOptions = () =>
   queryOptions({
-    queryKey: goalKeys.list(workspaceId),
+    queryKey: goalKeys.list(),
     queryFn: async () => {
-      const res = await api.get(`/workspaces/${workspaceId}/goals`);
+      const res = await api.get("/goals");
       return parseWithFallback(goalListSchema, res, []);
+    },
+  });
+
+export const goalDetailOptions = (goalId: number) =>
+  queryOptions({
+    queryKey: goalKeys.detail(goalId),
+    queryFn: async () => {
+      const res = await api.get(`/goals/${goalId}`);
+      return goalSchema.parse(res);
     },
   });
