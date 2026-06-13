@@ -1,0 +1,23 @@
+{
+  "name": "claude-for-SuperPmAgent",
+  "displayName": "Claude for SuperPmAgent",
+  "description": "SuperPmAgent plugin marketplace with orchestration, coding, and reusable business skills.",
+  "version": "0.1.0",
+  "plugins": [
+    {
+      "name": "SuperPmAgent-core",
+      "path": "./SuperPmAgent-core",
+      "description": "Goal orchestration, discovery, extension prompts, and distillation."
+    },
+    {
+      "name": "SuperPmAgent-coding",
+      "path": "./SuperPmAgent-coding",
+      "description": "Repository exploration, coding, testing, debugging, and PR submission skills."
+    },
+    {
+      "name": "SuperPmAgent-business",
+      "path": "./SuperPmAgent-business",
+      "description": "Reusable Conduit business-change patterns."
+    }
+  ]
+}
