@@ -21,9 +21,9 @@ const GithubIcon = ({ size = 20, className = '' }: { size?: number; className?: 
 )
 
 const STEPS = [
-  { key: 'token' as Step, label: '输入 Token' },
-  { key: 'select' as Step, label: '选择仓库' },
-  { key: 'final' as Step, label: '开始使用' },
+  { key: 'token' as Step, label: 'Enter Token' },
+  { key: 'select' as Step, label: 'Select Repo' },
+  { key: 'final' as Step, label: 'Get Started' },
 ]
 
 function StepDots({ current }: { current: Step }) {
@@ -97,7 +97,7 @@ export default function Login() {
       }
       setStep('select')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Token 无效或无法连接 GitHub')
+      setError(e instanceof Error ? e.message : 'Invalid token or cannot connect to GitHub')
     } finally {
       setLoading(false)
     }
@@ -125,7 +125,7 @@ export default function Login() {
       }
       navigate(`/profile`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '登录失败，请重试')
+      setError(e instanceof Error ? e.message : 'Login failed, please retry')
     } finally {
       setLoading(false)
     }
@@ -193,7 +193,7 @@ function TokenStep({ pat, showPat, loading, error, onPatChange, onTogglePat, onV
         <div className="p-6 pb-4">
           <Text as="h1" className="text-3xl mb-1">SuperPmAgent</Text>
           <p className="text-sm text-muted-foreground">
-            使用 GitHub Personal Access Token 登录。输入 Token 后自动获取仓库列表。
+            Sign in with a GitHub Personal Access Token. Your repos will be listed automatically.
           </p>
         </div>
 
@@ -221,14 +221,14 @@ function TokenStep({ pat, showPat, loading, error, onPatChange, onTogglePat, onV
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              需要 repo 权限 ·{' '}
+              Requires repo scope ·{' '}
               <a
                 className="text-[#8B5CF6] underline decoration-[#8B5CF6] decoration-2 underline-offset-4 hover:decoration-4"
                 href="https://github.com/settings/tokens/new?scopes=repo"
                 target="_blank"
                 rel="noreferrer"
               >
-                前往 GitHub 创建 &rarr;
+                Create on GitHub &rarr;
               </a>
             </p>
           </div>
@@ -241,14 +241,14 @@ function TokenStep({ pat, showPat, loading, error, onPatChange, onTogglePat, onV
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                验证 Token 中...
+                Validating...
               </span>
-            ) : '验证并获取仓库'}
+            ) : 'Validate & Fetch Repos'}
           </Button>
 
           {error && (
             <Alert status="warning">
-              <Alert.Title>验证失败</Alert.Title>
+              <Alert.Title>Validation Failed</Alert.Title>
               <Alert.Description>{error}</Alert.Description>
             </Alert>
           )}
@@ -256,13 +256,13 @@ function TokenStep({ pat, showPat, loading, error, onPatChange, onTogglePat, onV
           <div className="border-t-2 pt-4">
             <Link to="/login" className="block">
               <Button variant="outline" className="w-full">
-                &larr; 使用 GitHub OAuth 登录
+                &larr; Sign in with GitHub OAuth
               </Button>
             </Link>
           </div>
 
           <div className="text-xs text-muted-foreground pt-2 border-t-2">
-            <strong>没有账号？</strong> SuperPmAgent 不做注册 — 能访问仓库就能登录。
+            <strong>No account?</strong> SuperPmAgent has no sign-up &mdash; repo access is your login.
           </div>
         </div>
       </div>
@@ -319,7 +319,7 @@ function SelectStep({
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-10 font-mono"
-              placeholder="搜索仓库..."
+              placeholder="Search repos..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
             />
@@ -329,7 +329,7 @@ function SelectStep({
             <div style={{ maxHeight: 320, overflowY: 'auto', overflowX: 'hidden' }}>
             {filtered.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
-                没有匹配的仓库
+                No matching repos
               </div>
             ) : (
               filtered.map((repo) => {
@@ -376,10 +376,10 @@ function SelectStep({
 
           <div className="flex gap-3 pt-2">
             <Button variant="outline" className="flex-1" onClick={onBack}>
-              &larr; 返回
+              &larr; Back
             </Button>
             <Button className="flex-1" disabled={!selectedRepo} onClick={onConfirm}>
-              确认选择
+              Confirm
             </Button>
           </div>
         </div>
@@ -432,12 +432,12 @@ function FinalStep({
             <GithubIcon size={18} />
             <span className="font-mono text-sm flex-1">{selectedRepo.owner}/{selectedRepo.name}</span>
             <button onClick={onBack} className="ml-auto text-xs text-[#8B5CF6] underline decoration-[#8B5CF6] decoration-2 underline-offset-4 hover:decoration-4 cursor-pointer">
-              更换
+              Change
             </button>
           </div>
 
           <div>
-            <Label htmlFor="anthropic-key" className="mb-1.5 block font-head text-sm">Anthropic API Key（可选）</Label>
+            <Label htmlFor="anthropic-key" className="mb-1.5 block font-head text-sm">Anthropic API Key (optional)</Label>
             <div className="relative">
               <Input
                 id="anthropic-key"
@@ -462,14 +462,14 @@ function FinalStep({
                 target="_blank"
                 rel="noreferrer"
               >
-                获取 API Key &rarr;
+                Get API Key &rarr;
               </a>
             </p>
           </div>
 
           {error && (
             <Alert status="warning">
-              <Alert.Title>登录失败</Alert.Title>
+              <Alert.Title>Login Failed</Alert.Title>
               <Alert.Description>{error}</Alert.Description>
             </Alert>
           )}
@@ -482,9 +482,9 @@ function FinalStep({
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                验证中...
+                Verifying...
               </span>
-            ) : '开始使用'}
+            ) : 'Get Started'}
           </Button>
         </div>
       </div>

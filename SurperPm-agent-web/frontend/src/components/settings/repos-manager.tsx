@@ -18,7 +18,7 @@ export function ReposManager() {
   if (!workspaceId) {
     return (
       <div className="max-w-lg">
-        <p className="text-sm text-muted-foreground">尚无工作区。</p>
+        <p className="text-sm text-muted-foreground">No workspace yet.</p>
       </div>
     );
   }
@@ -66,7 +66,7 @@ function ReposCard({ workspaceId }: { workspaceId: string }) {
       <Card.Content>
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            全局仓库列表,创建目标时可从中选择。
+            Global repo list — select from these when creating goals.
           </p>
           {repos.map((url, idx) => (
             <div key={idx} className="flex items-center gap-2">
@@ -95,7 +95,7 @@ function ReposCard({ workspaceId }: { workspaceId: string }) {
           </div>
           {addMutation.isError && (
             <p className="text-xs text-destructive">
-              添加失败: {(addMutation.error as Error).message}
+              Add failed: {(addMutation.error as Error).message}
             </p>
           )}
         </div>

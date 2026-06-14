@@ -5,7 +5,7 @@ import { sshKeyOptions, globalConfigKeys } from "@/lib/queries/global-config";
 import { Button } from "@/components/retroui/Button";
 import { Textarea } from "@/components/retroui/Textarea";
 import { Alert } from "@/components/retroui/Alert";
-import { KeyRound, Copy, RefreshCw } from "lucide-react";
+import { KeyRound, Copy, RefreshCw, Upload } from "lucide-react";
 
 export function SshKeyDisplay() {
   const [copied, setCopied] = useState(false);
@@ -20,6 +20,13 @@ export function SshKeyDisplay() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: globalConfigKeys.sshKey() });
     },
+  });
+
+  const [pushResult, setPushResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const pushToGithubMutation = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; message: string }>("/global-config/push-ssh-key-to-github"),
+    onSuccess: (data) => setPushResult(data),
+    onError: (e: Error) => setPushResult({ ok: false, message: e.message }),
   });
 
   const handleCopy = async () => {
@@ -46,7 +53,7 @@ export function SshKeyDisplay() {
 
   if (!publicKey) {
     return (
-      <div className="flex flex-col items-center gap-4 py-6 border-2 border-border bg-card px-6 shadow-[3px_3px_0_0_#000]">
+      <div className="flex flex-col items-center gap-3 py-4 border border-border bg-card px-4">
         <KeyRound size={32} className="opacity-15" />
         <div className="text-center">
           <p className="text-sm font-head">No SSH key generated</p>
@@ -78,7 +85,7 @@ export function SshKeyDisplay() {
       {!hasPrivateKey && (
         <Alert status="warning">
           <Alert.Description>
-            私钥丢失，当前公钥无法使用。请重新生成密钥对并更新 GitHub 上的公钥。
+            Private key missing. Please regenerate the key pair.
           </Alert.Description>
         </Alert>
       )}
@@ -98,21 +105,36 @@ export function SshKeyDisplay() {
           {copied ? "Copied!" : "Copy"}
         </Button>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => generateMutation.mutate()}
-        disabled={generateMutation.isPending}
-      >
-        <RefreshCw
-          size={14}
-          className={generateMutation.isPending ? "animate-spin" : ""}
-        />
-        {generateMutation.isPending ? "Generating..." : "Regenerate SSH Key"}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => generateMutation.mutate()}
+          disabled={generateMutation.isPending}
+        >
+          <RefreshCw
+            size={14}
+            className={generateMutation.isPending ? "animate-spin" : ""}
+          />
+          {generateMutation.isPending ? "Generating..." : "Regenerate"}
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => { setPushResult(null); pushToGithubMutation.mutate(); }}
+          disabled={pushToGithubMutation.isPending}
+        >
+          <Upload size={14} />
+          {pushToGithubMutation.isPending ? "Adding..." : "Add to GitHub"}
+        </Button>
+      </div>
       {generateMutation.isError && (
         <p className="text-xs text-destructive font-bold">
           Failed to generate key: {(generateMutation.error as Error).message}
+        </p>
+      )}
+      {pushResult && (
+        <p className={`text-xs font-bold ${pushResult.ok ? "text-green-600" : "text-destructive"}`}>
+          {pushResult.ok ? `✓ ${pushResult.message}` : `✗ ${pushResult.message}`}
         </p>
       )}
     </div>

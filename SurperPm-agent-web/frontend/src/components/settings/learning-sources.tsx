@@ -77,7 +77,7 @@ export function LearningSourcesTab() {
     <div className="max-w-2xl space-y-6">
       <Card>
         <Card.Header>
-          <Card.Title>内部源</Card.Title>
+          <Card.Title>Internal Sources</Card.Title>
         </Card.Header>
         <Card.Content>
           <div className="space-y-3">
@@ -93,7 +93,7 @@ export function LearningSourcesTab() {
                 }
                 className="rounded border-border"
               />
-              Goal 执行记录
+              Goal executions
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -107,7 +107,7 @@ export function LearningSourcesTab() {
                 }
                 className="rounded border-border"
               />
-              AI 讨论记录
+              AI discussions
             </label>
           </div>
         </Card.Content>
@@ -115,7 +115,7 @@ export function LearningSourcesTab() {
 
       <Card>
         <Card.Header>
-          <Card.Title>外部源</Card.Title>
+          <Card.Title>External Sources</Card.Title>
         </Card.Header>
         <Card.Content>
           <div className="space-y-4">
@@ -137,7 +137,7 @@ export function LearningSourcesTab() {
 
             <div className="flex items-end gap-2">
               <div>
-                <Label className="text-xs mb-1 block">类型</Label>
+                <Label className="text-xs mb-1 block">Type</Label>
                 <Select value={newSourceType} onValueChange={(v) => setNewSourceType((v ?? "github") as ExternalSource["type"])}>
                   <Select.Trigger className="w-28">
                     <Select.Value />
@@ -145,7 +145,7 @@ export function LearningSourcesTab() {
                   <Select.Content>
                     <Select.Item value="github">GitHub</Select.Item>
                     <Select.Item value="rss">RSS</Select.Item>
-                    <Select.Item value="webpage">网页</Select.Item>
+                    <Select.Item value="webpage">Webpage</Select.Item>
                   </Select.Content>
                 </Select>
               </div>
@@ -168,12 +168,12 @@ export function LearningSourcesTab() {
 
       <Card>
         <Card.Header>
-          <Card.Title>调度与衰减</Card.Title>
+          <Card.Title>Schedule & Decay</Card.Title>
         </Card.Header>
         <Card.Content>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs mb-1 block">蒸馏间隔（小时）</Label>
+              <Label className="text-xs mb-1 block">Distill interval (hours)</Label>
               <Input
                 type="number"
                 min={1}
@@ -189,7 +189,7 @@ export function LearningSourcesTab() {
               />
             </div>
             <div>
-              <Label className="text-xs mb-1 block">每周期最大条目</Label>
+              <Label className="text-xs mb-1 block">Max items per cycle</Label>
               <Input
                 type="number"
                 min={1}
@@ -205,7 +205,7 @@ export function LearningSourcesTab() {
               />
             </div>
             <div>
-              <Label className="text-xs mb-1 block">归档阈值</Label>
+              <Label className="text-xs mb-1 block">Archive threshold</Label>
               <Input
                 type="number"
                 min={0}
@@ -222,7 +222,7 @@ export function LearningSourcesTab() {
               />
             </div>
             <div>
-              <Label className="text-xs mb-1 block">置顶加分</Label>
+              <Label className="text-xs mb-1 block">Pin bonus</Label>
               <Input
                 type="number"
                 min={0}
@@ -245,12 +245,12 @@ export function LearningSourcesTab() {
       <div className="flex items-center gap-3">
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
           <Save className="h-3.5 w-3.5 mr-1" />
-          {saveMutation.isPending ? "保存中..." : "保存配置"}
+          {saveMutation.isPending ? "Saving..." : "Save"}
         </Button>
-        {saveMutation.isSuccess && <span className="text-xs text-green-600">已保存</span>}
+        {saveMutation.isSuccess && <span className="text-xs text-green-600">Saved</span>}
         {saveMutation.isError && (
           <span className="text-xs text-destructive">
-            保存失败: {(saveMutation.error as Error).message}
+            Save failed: {(saveMutation.error as Error).message}
           </span>
         )}
       </div>

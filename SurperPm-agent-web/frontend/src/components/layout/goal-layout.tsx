@@ -32,14 +32,14 @@ export function GoalLayout() {
     <GoalWSProvider goalId={goalId}>
       <div className="flex flex-col h-full">
         <div className="shrink-0 border-b-2 border-border bg-card px-4 py-3">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-2 mb-2">
             <NavLink
               to="/goals"
-              className="p-1 border-2 border-border bg-background hover:bg-accent transition-all"
+              className="p-1 hover:bg-muted transition-colors rounded-sm"
             >
               <ArrowLeft size={14} />
             </NavLink>
-            <Text as="h2" className="text-lg truncate flex-1">
+            <Text as="h2" className="text-sm font-bold truncate flex-1">
               {goal?.title ?? `Goal #${goalId}`}
             </Text>
             {goal && (
@@ -54,10 +54,10 @@ export function GoalLayout() {
                 key={to}
                 to={to}
                 className={({ isActive }) =>
-                  `flex items-center gap-2 px-3 py-1.5 text-xs font-medium border-2 transition-all ${
+                  `flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-all rounded-sm ${
                     isActive
-                      ? "border-border bg-primary text-foreground shadow-[2px_2px_0_0_#000]"
-                      : "border-transparent text-foreground/50 hover:border-border hover:bg-background"
+                      ? "bg-primary text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`
                 }
               >

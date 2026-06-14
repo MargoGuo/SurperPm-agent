@@ -72,7 +72,7 @@ export function SecretsManager() {
       {showForm && (
         <form
           onSubmit={handleAdd}
-          className="p-4 border-2 border-border shadow-[4px_4px_0_0_#000] bg-muted/30 space-y-3"
+          className="p-3 border border-border bg-muted/30 space-y-2"
         >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
@@ -193,7 +193,7 @@ function SecretRow({ secret, onDelete, isDeleting }: SecretRowProps) {
           onClick={handleReveal}
           disabled={revealing}
           className="p-1.5 border-2 border-border bg-background hover:bg-muted transition-all disabled:opacity-50"
-          title={revealed !== null ? "隐藏" : "显示"}
+          title={revealed !== null ? "Hide" : "Show"}
         >
           {revealing ? (
             <span className="inline-block w-3.5 h-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />

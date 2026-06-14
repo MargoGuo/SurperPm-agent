@@ -48,9 +48,9 @@ type Step = 'connect' | 'select' | 'final'
 // ---- step indicator ----
 
 const STEPS = [
-  { key: 'connect' as Step, label: '连接 GitHub' },
-  { key: 'select' as Step, label: '选择仓库' },
-  { key: 'final'  as Step, label: '开始使用' },
+  { key: 'connect' as Step, label: 'Connect GitHub' },
+  { key: 'select' as Step, label: 'Select Repo' },
+  { key: 'final'  as Step, label: 'Get Started' },
 ]
 
 function StepDots({ current }: { current: Step }) {
@@ -99,7 +99,7 @@ function ConnectStep({ loading, error, onConnect }: {
         <div className="p-6 pb-4">
           <Text as="h1" className="text-3xl mb-1">SuperPmAgent</Text>
           <p className="text-sm text-muted-foreground">
-            连接 GitHub 即可开始。无需注册，授权后自动列出你的仓库。
+            Connect GitHub to get started. No sign-up needed &mdash; your repos are listed after authorization.
           </p>
         </div>
 
@@ -115,7 +115,7 @@ function ConnectStep({ loading, error, onConnect }: {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  正在跳转 GitHub 授权...
+                  Redirecting to GitHub...
                 </span>
               ) : (
                 <>
@@ -127,30 +127,30 @@ function ConnectStep({ loading, error, onConnect }: {
           </div>
 
           <div className="border-t-2 pt-4">
-            <p className="text-xs text-muted-foreground mb-2 font-head">授权后我们将获取：</p>
+            <p className="text-xs text-muted-foreground mb-2 font-head">After authorization we will access:</p>
             <div className="space-y-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span className="text-green-600 leading-none">✓</span>
-                <span>读取你的公开仓库和私有仓库列表</span>
+                <span>Read your public and private repo list</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-green-600 leading-none">✓</span>
-                <span>读写所选仓库的代码、Issues、PR</span>
+                <span>Read/write code, issues & PRs in your selected repo</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-destructive leading-none">✗</span>
-                <span className="text-muted-foreground/60">不会访问你的 GitHub 密码或设置</span>
+                <span className="text-muted-foreground/60">Will not access your GitHub password or settings</span>
               </div>
             </div>
           </div>
 
           {error && (
             <Alert status="warning">
-              <Alert.Title>连接失败</Alert.Title>
+              <Alert.Title>Connection Failed</Alert.Title>
               <Alert.Description>
                 {error}
                 {error.includes('not configured') && (
-                  <span className="block mt-1">本地开发请使用下方 PAT 登录。</span>
+                  <span className="block mt-1">For local dev, use the PAT login below.</span>
                 )}
               </Alert.Description>
             </Alert>
@@ -159,16 +159,16 @@ function ConnectStep({ loading, error, onConnect }: {
           <div className="border-t-2 pt-4">
             <Link to="/login-pat" className="block">
               <Button variant="outline" className="w-full">
-                使用 Personal Access Token 登录
+                Sign in with Personal Access Token
               </Button>
             </Link>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              适合本地开发或无 OAuth App 配置的场景
+              For local dev or environments without OAuth App
             </p>
           </div>
 
           <div className="text-xs text-muted-foreground pt-2 border-t-2">
-            <strong>没有账号？</strong> SuperPmAgent 不做注册 — 能访问仓库就能登录。
+            <strong>No account?</strong> SuperPmAgent has no sign-up &mdash; repo access is your login.
           </div>
         </div>
       </div>
@@ -222,7 +222,7 @@ function SelectStep({
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-10 font-mono"
-              placeholder="搜索仓库..."
+              placeholder="Search repos..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
             />
@@ -233,14 +233,14 @@ function SelectStep({
             <div className="p-8 text-center text-sm text-muted-foreground">
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-foreground border-t-transparent mb-2" />
               <br />
-              加载仓库列表中...
+              Loading repos...
             </div>
           ) : (
             <div style={{ maxHeight: 320, overflowY: 'auto', overflowX: 'hidden' }}>
               <Tooltip.Provider>
               {filtered.length === 0 ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">
-                  没有匹配的仓库
+                  No matching repos
                 </div>
               ) : (
                 filtered.map((repo) => {
@@ -291,10 +291,10 @@ function SelectStep({
           {/* actions */}
           <div className="flex gap-3 pt-2">
             <Button variant="outline" className="flex-1" onClick={onBack}>
-              &larr; 返回
+              &larr; Back
             </Button>
             <Button className="flex-1" disabled={!selectedRepo} onClick={onConfirm}>
-              确认选择
+              Confirm
             </Button>
           </div>
         </div>
@@ -344,13 +344,13 @@ function FinalStep({
             <GithubIcon size={18} />
             <span className="font-mono text-sm flex-1">{selectedRepo.owner}/{selectedRepo.name}</span>
             <button onClick={onBack} className="ml-auto text-xs text-[#8B5CF6] underline decoration-[#8B5CF6] decoration-2 underline-offset-4 hover:decoration-4 cursor-pointer">
-              更换
+              Change
             </button>
           </div>
 
           {/* api key */}
           <div>
-            <Label htmlFor="anthropic-key" className="mb-1.5 block font-head text-sm">Anthropic API Key（可选）</Label>
+            <Label htmlFor="anthropic-key" className="mb-1.5 block font-head text-sm">Anthropic API Key (optional)</Label>
             <div className="relative">
               <Input
                 id="anthropic-key"
@@ -375,14 +375,14 @@ function FinalStep({
                 target="_blank"
                 rel="noreferrer"
               >
-                获取 API Key &rarr;
+                Get API Key &rarr;
               </a>
             </p>
           </div>
 
           {error && (
             <Alert status="warning">
-              <Alert.Title>登录失败</Alert.Title>
+              <Alert.Title>Login Failed</Alert.Title>
               <Alert.Description>{error}</Alert.Description>
             </Alert>
           )}
@@ -395,9 +395,9 @@ function FinalStep({
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                验证中...
+                Verifying...
               </span>
-            ) : '开始使用'}
+            ) : 'Get Started'}
           </Button>
         </div>
       </div>
@@ -431,7 +431,7 @@ export default function LoginOAuth() {
     const errorParam = params.get('error')
 
     if (errorParam) {
-      setError(errorParam === 'access_denied' ? 'GitHub 授权被取消' : 'GitHub 授权失败，请重试')
+      setError(errorParam === 'access_denied' ? 'GitHub authorization cancelled' : 'GitHub authorization failed, please retry')
       window.history.replaceState({}, '', '/login')
       return
     }
@@ -475,7 +475,7 @@ export default function LoginOAuth() {
       setAvatarUrl(user.avatar_url || '')
       setRepos(repos)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载仓库列表失败')
+      setError(e instanceof Error ? e.message : 'Failed to load repos')
       setStep('connect')
     } finally {
       setLoading(false)
@@ -489,7 +489,7 @@ export default function LoginOAuth() {
       const { url } = await api.get<{ url: string }>('/auth/github/authorize')
       window.location.href = url
     } catch (e) {
-      setError(e instanceof Error ? e.message : '无法启动 GitHub 授权')
+      setError(e instanceof Error ? e.message : 'Failed to start GitHub authorization')
       setLoading(false)
     }
   }
@@ -519,7 +519,7 @@ export default function LoginOAuth() {
       }
       navigate(`/profile`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '登录失败，请重试')
+      setError(e instanceof Error ? e.message : 'Login failed, please retry')
     } finally {
       setLoading(false)
     }

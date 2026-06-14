@@ -424,9 +424,12 @@ function MultiSelect({ q, answers, setAnswers, autoLang }: {
 function DonePhase({ answers, onGoProfile }: {
   answers: Answers; onGoProfile: () => void
 }) {
-  const handleSave = () => {
+  const handleSave = async () => {
     localStorage.setItem(DONE_KEY, '1')
     saveLocalAnswers(answers)
+    try {
+      await api.post('/setup/finish', { answers })
+    } catch { /* backend sync is best-effort */ }
     onGoProfile()
   }
 
@@ -558,6 +561,8 @@ function ProfileGrid({ answers, setAnswers }: {
   const saveEdit = (q: Question) => {
     const next = { ...answers, [q.id]: draft }
     setAnswers(next)
+    saveLocalAnswers(next)
+    api.post('/setup/update-profile', { answers: next }).catch(() => {})
     setEditId(null)
   }
 
