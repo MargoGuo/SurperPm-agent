@@ -1,22 +1,24 @@
-"""Setup wizard routes — team profile + personal profile."""
+"""Setup wizard routes — team profile + personal profile (local file-based)."""
 import asyncio
 import json
 import logging
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, HTTPException
 
+from app.config import settings
 from app.services import github_client
 from app.services import session as session_svc
+from app.services.knowledge_store import get_store
 
 _logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 SESSION_COOKIE = "SuperPmAgent_session"
-PROFILE_PATH = "knowledge/profiles/{username}.md"
 TEAM_PROFILE_PATH = "knowledge/profiles/team.md"
 
 
@@ -36,6 +38,21 @@ def _split_repo(repo: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
+def _profiles_dir() -> Path:
+    """Return the local profiles directory inside the knowledge repo."""
+    knowledge_path = Path(settings.knowledge_repo_path) if settings.knowledge_repo_path else None
+    if not knowledge_path or not knowledge_path.is_dir():
+        store = get_store()
+        knowledge_path = store._root.parent
+    return knowledge_path / "profiles" / "users"
+
+
+def _profile_path(username: str) -> Path:
+    d = _profiles_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"{username}.md"
+
+
 @router.get("/ping")
 async def ping() -> dict:
     return {"ok": True}
@@ -45,10 +62,7 @@ async def ping() -> dict:
 async def init_state(
     SuperPmAgent_session: Annotated[str | None, Cookie()] = None,
 ) -> dict:
-    """Whether the system is initialized + whether the caller is the founder.
-
-    Drives login routing: once initialized, non-founders enter with just a token.
-    """
+    """Whether the system is initialized + whether the caller is the founder."""
     from app.database import async_session
     from app.models.global_config import GlobalConfig
 
@@ -58,9 +72,12 @@ async def init_state(
         if data:
             username = data.get("username", "")
 
+    store = get_store()
+    store_settings = store.get_settings()
+    initialized = bool(store_settings.get("knowledge_repo_url"))
+
     async with async_session() as session:
         cfg = await session.get(GlobalConfig, 1)
-        initialized = bool(cfg and cfg.knowledge_repo_url)
         founder = cfg.founder_username if cfg else None
 
     return {
@@ -84,7 +101,6 @@ async def team_profile(
 
     owner, repo_name = _split_repo(repo)
 
-    # Run all 4 GitHub API calls in parallel via thread pool
     loop = asyncio.get_event_loop()
 
     async def _safe(fn, *args):
@@ -135,12 +151,19 @@ async def state(
     username = sess.get("username", "")
 
     completed = False
+    answers: dict | None = None
     auto_detected_languages: dict = {}
 
-    if token and repo and username:
+    if username:
+        profile_file = _profile_path(username)
+        if profile_file.is_file():
+            md = profile_file.read_text("utf-8")
+            completed = True
+            answers = _parse_profile_json(md)
+
+    if token and repo:
         owner, repo_name = _split_repo(repo)
         loop = asyncio.get_event_loop()
-        profile_path = PROFILE_PATH.format(username=username)
 
         async def _safe(fn, *args):
             try:
@@ -148,14 +171,9 @@ async def state(
             except Exception:
                 return None
 
-        existing_res, languages_res = await asyncio.gather(
-            _safe(github_client.read_file_from_repo, token, owner, repo_name, profile_path),
-            _safe(github_client.get_repo_languages, token, owner, repo_name),
+        languages_res = await _safe(
+            github_client.get_repo_languages, token, owner, repo_name
         )
-
-        completed = existing_res is not None
-        answers = _parse_profile_json(existing_res) if completed else None
-
         languages = languages_res if isinstance(languages_res, dict) else {}
         if languages:
             total = sum(int(v) for v in languages.values()) or 1
@@ -179,28 +197,17 @@ async def finish(
     SuperPmAgent_session: Annotated[str | None, Cookie()] = None,
 ) -> dict:
     sess = _get_session(SuperPmAgent_session)
-    token = sess.get("github_token", "")
-    repo = sess.get("repo", "")
     username = sess.get("username", "")
-    if not token or not repo:
-        raise HTTPException(status_code=400, detail="repo not configured")
+    if not username:
+        raise HTTPException(status_code=400, detail="username not in session")
 
     answers = payload.get("answers", {})
     auto_lang = payload.get("auto_detected_languages", {})
-    owner, repo_name = _split_repo(repo)
-    path = PROFILE_PATH.format(username=username)
     md = _render_profile_md(username, answers, auto_lang)
 
-    try:
-        result = github_client.commit_file(
-            token, owner, repo_name, path, md,
-            f"Update personal profile for {username}",
-        )
-        return {"ok": True, "sha": result["sha"]}
-    except Exception as e:
-        _logger.error("commit failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to save profile") from e
-
+    profile_file = _profile_path(username)
+    profile_file.write_text(md, encoding="utf-8")
+    return {"ok": True}
 
 
 @router.post("/update-profile")
@@ -209,27 +216,16 @@ async def update_profile(
     SuperPmAgent_session: Annotated[str | None, Cookie()] = None,
 ) -> dict:
     sess = _get_session(SuperPmAgent_session)
-    token = sess.get("github_token", "")
-    repo = sess.get("repo", "")
     username = sess.get("username", "")
-    if not token or not repo:
-        raise HTTPException(status_code=400, detail="repo not configured")
+    if not username:
+        raise HTTPException(status_code=400, detail="username not in session")
 
     answers = payload.get("answers", {})
-    owner, repo_name = _split_repo(repo)
-    path = PROFILE_PATH.format(username=username)
     md = _render_profile_md(username, answers, {})
 
-    try:
-        result = github_client.commit_file(
-            token, owner, repo_name, path, md,
-            f"Update personal profile for {username}",
-        )
-        return {"ok": True, "sha": result["sha"]}
-    except Exception as e:
-        _logger.error("update failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to update profile") from e
-
+    profile_file = _profile_path(username)
+    profile_file.write_text(md, encoding="utf-8")
+    return {"ok": True}
 
 
 # ── Profile MD rendering ──────────────────────────────────────
@@ -247,12 +243,10 @@ _LABELS = {
 
 
 def _answers_to_json(answers: dict) -> str:
-    """将原始 answers 序列化为 JSON，嵌入 markdown 注释中。"""
     return json.dumps(answers, ensure_ascii=False, default=str)
 
 
 def _parse_profile_json(md: str) -> dict | None:
-    """从 markdown 的 PROFILE_JSON 注释中提取原始 answers。"""
     m = re.search(r'<!-- PROFILE_JSON\n(.*?)\n-->', md, re.DOTALL)
     if not m:
         return None

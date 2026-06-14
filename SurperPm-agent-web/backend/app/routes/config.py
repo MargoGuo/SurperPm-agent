@@ -4,12 +4,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import func, select
 
 from app.config import settings
-from app.database import get_session
-from app.models.execution import Execution
 from app.routes.deps import require_auth
 
 router = APIRouter()
@@ -22,11 +18,12 @@ PLUGIN_ROOT = Path(settings.plugin_repo_path) if settings.plugin_repo_path else 
 
 @router.get("/integrations")
 async def integrations(_user: dict = Depends(require_auth)) -> list:
+    github_connected = bool(_user.get("github_token"))
     items = [
         {
             "name": "GitHub PAT",
             "endpoint": "https://api.github.com",
-            "connected": bool(settings.github_token),
+            "connected": github_connected,
         },
         {
             "name": "模型 endpoint",
@@ -140,20 +137,14 @@ async def update_ai_config(
 
 @router.get("/usage")
 async def usage(
-    session: AsyncSession = Depends(get_session),
     _user: dict = Depends(require_auth),
 ) -> dict:
-    token_stmt = select(
-        func.coalesce(func.sum(Execution.token_used), 0)
-    )
-    result = await session.execute(token_stmt)
-    total_tokens = result.scalar() or 0
+    from app.services.knowledge_store import get_store
 
-    count_stmt = select(func.count()).select_from(Execution)
-    result = await session.execute(count_stmt)
-    total_executions = result.scalar() or 0
-
+    store = get_store()
+    exes = store.list("executions")
+    total_tokens = sum(e.get("token_used") or 0 for e in exes)
     return {
         "total_tokens": total_tokens,
-        "total_executions": total_executions,
+        "total_executions": len(exes),
     }

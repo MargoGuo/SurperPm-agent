@@ -21,15 +21,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.config import settings
-from app.models.goal import Goal
-from app.models.workspace import Workspace
 from app.services.crypto import decrypt
 
 _logger = logging.getLogger(__name__)
 
 _REPOS_ROOT = Path("data/repos")
-_PLUGIN_SUBDIRS = ("SuperPmAgent-core", "SuperPmAgent-coding", "SuperPmAgent-business")
-
 _SSH_PREFIX = re.compile(r"^(git@|ssh://)")
 _HTTPS_REPO = re.compile(r"^https?://(?:[^@/]+@)?([^/]+)/(.+?)(?:\.git)?/?$")
 _SHORT_REPO = re.compile(r"^[\w.-]+/[\w.-]+?(?:\.git)?/?$")
@@ -46,14 +42,17 @@ class ExecEnv:
     branch_hint: str = "main"
 
 
-def resolve_repo_url(goal: Goal, workspace: Workspace) -> str:
+def resolve_repo_url(goal: dict, workspace: dict) -> str:
     """Pick the repo to operate on: goal > workspace > first of repos JSON."""
-    candidates: list[str | None] = [goal.repo_url, workspace.repo_url]
-    for raw in (goal.repos, workspace.repos):
+    candidates: list[str | None] = [
+        goal.get("repo_url"),
+        workspace.get("repo_url"),
+    ]
+    for raw in (goal.get("repos"), workspace.get("repos")):
         if not raw:
             continue
         try:
-            arr = json.loads(raw)
+            arr = json.loads(raw) if isinstance(raw, str) else raw
         except (ValueError, TypeError):
             continue
         if isinstance(arr, list) and arr:
@@ -80,8 +79,8 @@ def to_ssh_url(url: str) -> str:
     return url
 
 
-async def resolve_ssh_private_key_enc(workspace: Workspace) -> str | None:
-    """The SSH key the user registers on GitHub is the global one; fall back to workspace."""
+async def resolve_ssh_private_key_enc(workspace: dict) -> str | None:
+    """Global SSH key first, then workspace-level."""
     from app.database import async_session
     from app.models.global_config import GlobalConfig
 
@@ -89,7 +88,7 @@ async def resolve_ssh_private_key_enc(workspace: Workspace) -> str | None:
         cfg = await session.get(GlobalConfig, 1)
     if cfg and cfg.ssh_private_key_enc:
         return cfg.ssh_private_key_enc
-    return workspace.ssh_private_key_enc
+    return workspace.get("ssh_private_key_enc")
 
 
 def prepare_ssh(private_key_enc: str | None, keydir: Path) -> tuple[Path | None, str | None]:
@@ -170,23 +169,36 @@ async def resolve_github_token() -> str | None:
         return None
 
 
+def _resolve_plugin_root() -> Path | None:
+    """Find the plugins directory: knowledge/plugins/ first, then fallback."""
+    from app.services.knowledge_store import get_store
+
+    store = get_store()
+    knowledge_plugins = store._root.parent / "plugins"
+    if knowledge_plugins.is_dir():
+        return knowledge_plugins
+    if settings.plugin_repo_path:
+        p = Path(settings.plugin_repo_path)
+        if p.is_dir():
+            return p
+    return None
+
+
 def plugin_dirs() -> list[str]:
-    """Resolve local SuperPmAgent-plugins plugin dirs for `--plugin-dir`."""
-    root = settings.plugin_repo_path
-    if not root:
-        _logger.info("exec_env: plugin_repo_path not configured — running without plugins")
+    """Resolve plugin dirs from knowledge/plugins/ for agent execution."""
+    base = _resolve_plugin_root()
+    if not base:
+        _logger.info("exec_env: no plugin directory found")
         return []
-    base = Path(root)
     dirs: list[str] = []
-    for sub in _PLUGIN_SUBDIRS:
-        d = base / sub
+    for d in sorted(base.iterdir()):
+        if not d.is_dir() or d.name.startswith("."):
+            continue
         if (d / ".disabled").exists():
-            _logger.info("exec_env: skipping disabled plugin: %s", sub)
+            _logger.info("exec_env: skipping disabled plugin: %s", d.name)
             continue
         if (d / ".claude-plugin" / "plugin.json").is_file():
             dirs.append(str(d))
-        else:
-            _logger.warning("exec_env: plugin dir missing or invalid: %s", d)
     return dirs
 
 
@@ -194,13 +206,14 @@ def workdir_for(workspace_id: str, goal_id: int) -> Path:
     return _REPOS_ROOT / workspace_id / f"goal-{goal_id}"
 
 
-async def prepare_execution(goal: Goal, workspace: Workspace) -> ExecEnv:
-    """Clone the goal's repo via SSH and assemble env + plugin dirs for the agent."""
-    assert goal.id is not None
+async def prepare_execution(goal: dict, workspace: dict) -> ExecEnv:
+    """Clone the goal's repo via SSH and assemble env + plugin dirs."""
+    goal_id = goal.get("id")
+    assert goal_id is not None
     repo_url = resolve_repo_url(goal, workspace)
     ssh_url = to_ssh_url(repo_url)
-    workdir = workdir_for(workspace.id, goal.id)
-    keydir = workdir.parent / f"goal-{goal.id}-ssh"
+    workdir = workdir_for(workspace.get("id", ""), goal_id)
+    keydir = workdir.parent / f"goal-{goal_id}-ssh"
 
     key_enc = await resolve_ssh_private_key_enc(workspace)
     keyfile, git_ssh = prepare_ssh(key_enc, keydir)

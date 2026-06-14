@@ -8,10 +8,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.routes.deps import require_auth, require_founder
+from app.services.clarify_agent import run_clarify_agent
+from app.services.clarify_executor import (
+    append_conversation_entry,
+    ensure_session_structure,
+    register_sources,
+    scaffold_notes,
+)
+from app.services.export_feishu_prd import export_session_to_feishu_prd
 
 router = APIRouter()
 
@@ -74,20 +82,17 @@ class NewSessionPayload(BaseModel):
 
 @router.post("/session/new")
 async def new_session(payload: NewSessionPayload, _user: dict = Depends(require_auth)) -> dict:
-    """Create a new session folder under knowledge/sessions/."""
+    """Create a new canonical session folder under knowledge/sessions/."""
     root = _ensure_root()
     session_dir = root / "sessions" / payload.name
     if session_dir.exists():
         raise HTTPException(409, f"Session already exists: {payload.name}")
 
-    session_dir.mkdir(parents=True)
-    (session_dir / "chat.jsonl").write_text("", encoding="utf-8")
+    ensure_session_structure(root, payload.name)
     (session_dir / "notes.md").write_text(
-        f"# {payload.name}\n\n_Session created {datetime.now(UTC).isoformat()}_\n",
+        scaffold_notes(payload.name, "", []),
         encoding="utf-8",
     )
-    exec_dir = session_dir / "executions"
-    exec_dir.mkdir()
 
     return {
         "name": payload.name,
@@ -98,6 +103,91 @@ async def new_session(payload: NewSessionPayload, _user: dict = Depends(require_
 class ChatPayload(BaseModel):
     session: str
     message: str
+
+
+class ClarifyPayload(BaseModel):
+    session: str
+    message: str
+    source_urls: list[str] = Field(default_factory=list)
+    use_agent: bool = True
+
+
+class ExportFeishuPrdPayload(BaseModel):
+    session: str
+    title: str | None = None
+    as_identity: str = "user"
+    parent_token: str | None = None
+    parent_position: str | None = None
+
+
+@router.post("/session/clarify")
+async def session_clarify(
+    payload: ClarifyPayload,
+    _user: dict = Depends(require_auth),
+) -> dict:
+    """Create or update a canonical clarify session under the knowledge repo."""
+    root = _ensure_root()
+    session_dir = ensure_session_structure(root, payload.session)
+    notes_file = session_dir / "notes.md"
+
+    source_records = register_sources(
+        session_dir,
+        message=payload.message,
+        source_urls=payload.source_urls,
+    )
+    append_conversation_entry(
+        session_dir,
+        message=payload.message,
+        source_records=source_records,
+    )
+
+    notes_created = False
+    mode = "fallback"
+    agent_response = ""
+    agent_error = ""
+    should_use_agent = (
+        payload.use_agent
+        and bool(settings.anthropic_api_key)
+        and bool(settings.plugin_repo_path)
+    )
+
+    if should_use_agent:
+        try:
+            result = await run_clarify_agent(
+                session_name=payload.session,
+                message=payload.message,
+                source_urls=[record["source_uri"] for record in source_records],
+                knowledge_root=root,
+            )
+            agent_response = result.get("response", "")
+            mode = result.get("mode", "agent")
+        except Exception as exc:
+            agent_error = str(exc)
+
+    if not notes_file.exists():
+        notes_file.write_text(
+            scaffold_notes(
+                payload.session,
+                payload.message,
+                [record["source_uri"] for record in source_records],
+            ),
+            encoding="utf-8",
+        )
+        notes_created = True
+
+    return {
+        "ok": True,
+        "session": payload.session,
+        "path": f"knowledge/sessions/{payload.session}",
+        "knowledge_root": str(root.resolve()),
+        "session_dir": str(session_dir.resolve()),
+        "notes_created": notes_created,
+        "registered_sources": len(source_records),
+        "ready_for_goal": False,
+        "mode": mode,
+        "agent_response": agent_response,
+        "agent_error": agent_error,
+    }
 
 
 @router.post("/session/chat")
@@ -127,6 +217,27 @@ async def session_chat(payload: ChatPayload, _user: dict = Depends(require_auth)
         f.write(reply_turn + "\n")
 
     return {"reply": reply_content}
+
+
+@router.post("/session/export/feishu-prd")
+async def export_feishu_prd(
+    payload: ExportFeishuPrdPayload,
+    _user: dict = Depends(require_auth),
+) -> dict:
+    root = _ensure_root()
+    try:
+        return export_session_to_feishu_prd(
+            session_name=payload.session,
+            knowledge_root=root,
+            title=payload.title,
+            as_identity=payload.as_identity,
+            parent_token=payload.parent_token,
+            parent_position=payload.parent_position,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sync")

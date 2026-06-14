@@ -87,6 +87,12 @@ async def _ws_browser_handler(websocket: WebSocket, workspace_id: str):
             pass
 
     try:
+        # Cancel any pending cleanup from a previous disconnection
+        browser_manager.cancel_cleanup(workspace_id, user_id)
+
+        # Check if tabs already exist (reconnection scenario)
+        existing_tabs = browser_manager.has_active_tabs(workspace_id, user_id)
+
         browser_manager.set_callbacks(
             workspace_id, user_id,
             on_frame=send_frame,
@@ -95,7 +101,16 @@ async def _ws_browser_handler(websocket: WebSocket, workspace_id: str):
             on_download=send_download,
         )
 
-        await browser_manager.create_tab(workspace_id, user_id)
+        if not existing_tabs:
+            # First connection — create initial tab
+            await browser_manager.create_tab(workspace_id, user_id)
+        else:
+            # Reconnection — restart screencast so frames flow to the new WebSocket
+            try:
+                await browser_manager.restart_active_screencast(workspace_id, user_id)
+            except Exception:
+                log.exception("ws_browser: failed to restart screencast on reconnection")
+        # Send current tab state (works for both new and existing tabs)
         await send_tabs()
 
         while True:
@@ -138,6 +153,12 @@ async def _ws_browser_handler(websocket: WebSocket, workspace_id: str):
                         await browser_manager.handle_mouse(page, msg)
                     elif msg_type == "scroll":
                         await browser_manager.handle_scroll(page, msg)
+                    elif msg_type == "back":
+                        await browser_manager.go_back(page)
+                    elif msg_type == "forward":
+                        await browser_manager.go_forward(page)
+                    elif msg_type == "reload":
+                        await browser_manager.reload(page)
                     elif msg_type == "key":
                         await browser_manager.handle_key(page, msg)
                     elif msg_type == "type":
@@ -155,11 +176,12 @@ async def _ws_browser_handler(websocket: WebSocket, workspace_id: str):
                 }))
 
     except WebSocketDisconnect:
-        log.info("ws_browser: client disconnected %s/%s", workspace_id, user_id)
+        log.info("ws_browser: client disconnected %s/%s — scheduling delayed cleanup", workspace_id, user_id)
     except Exception:
         log.exception("ws_browser: unexpected error")
     finally:
-        await browser_manager.remove_all_pages(workspace_id, user_id)
+        # Schedule delayed cleanup — pages survive brief disconnections (e.g. route switches)
+        browser_manager.schedule_cleanup(workspace_id, user_id, delay=30.0)
 
 
 async def _handle_screenshot_crop(ws: WebSocket, page, msg: dict) -> None:

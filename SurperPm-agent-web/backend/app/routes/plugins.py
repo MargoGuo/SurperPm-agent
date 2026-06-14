@@ -115,12 +115,15 @@ def _recurse_github_dir(
 
 
 def _plugin_root() -> Path:
-    root = settings.plugin_repo_path
-    if not root:
-        raise HTTPException(status_code=400, detail="PLUGIN_REPO_PATH not configured in .env")
-    p = Path(root)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+    from app.services.knowledge_store import get_store
+
+    store = get_store()
+    knowledge_plugins = store._root.parent / "plugins"
+    if knowledge_plugins.is_dir():
+        return knowledge_plugins
+    # Auto-create the plugins directory alongside the knowledge repo
+    knowledge_plugins.mkdir(parents=True, exist_ok=True)
+    return knowledge_plugins
 
 
 def _read_plugin_json(plugin_dir: Path) -> dict | None:
@@ -243,7 +246,12 @@ async def import_plugin_from_github(
     root = _plugin_root()
     dest = root / plugin_name
     if dest.exists():
-        raise HTTPException(status_code=409, detail=f"Plugin '{plugin_name}' already installed")
+        manifest = _read_plugin_json(dest)
+        if manifest:
+            raise HTTPException(status_code=409, detail=f"Plugin '{plugin_name}' already installed")
+        # Stale directory without valid manifest — clean up and proceed
+        _logger.warning("Stale plugin dir without manifest, removing: %s", dest)
+        shutil.rmtree(dest, ignore_errors=True)
 
     api_url = f"{_GITHUB_API}/repos/{owner}/{repo}/contents/{subpath}".rstrip("/")
     resp = http_requests.get(api_url, headers=headers, timeout=15, verify=False)
@@ -305,13 +313,19 @@ async def get_marketplace(_user: dict = Depends(require_auth)):
 
     plugins: list[PluginInfo] = []
     for entry in mkt_plugins:
+        subdir = entry.get("subdir") or entry.get("path", "").lstrip("./")
+        source = entry.get("source", repo_url)
+        # Build per-plugin URL: source + /tree/main/<subdir> when subdir exists
+        display_url = source
+        if subdir:
+            display_url = f"{source.rstrip('/')}/tree/main/{subdir}"
         plugins.append(PluginInfo(
             name=entry.get("name", ""),
             version=entry.get("version", "0.0.0"),
             description=entry.get("description"),
             author=entry.get("author"),
-            source_url=entry.get("source", repo_url),
-            subdir=entry.get("subdir") or entry.get("path", "").lstrip("./"),
+            source_url=display_url,
+            subdir=subdir,
             commands=entry.get("commands", []),
             skills=entry.get("skills", []),
             agents=entry.get("agents", []),
@@ -410,7 +424,12 @@ async def install_from_marketplace(
 
     dest = root / plugin_name
     if dest.exists():
-        raise HTTPException(status_code=409, detail=f"Plugin '{plugin_name}' already installed")
+        manifest = _read_plugin_json(dest)
+        if manifest:
+            raise HTTPException(status_code=409, detail=f"Plugin '{plugin_name}' already installed")
+        # Stale directory without valid manifest — clean up and proceed
+        _logger.warning("Stale plugin dir without manifest, removing: %s", dest)
+        shutil.rmtree(dest, ignore_errors=True)
 
     owner, repo, branch, _ = _parse_github_url(source_url)
     headers = _github_headers(_user)
@@ -487,3 +506,89 @@ async def disable_plugin(
         raise HTTPException(status_code=404, detail=f"Plugin '{name}' not found")
     (dest / ".disabled").touch()
     return {"ok": True, "enabled": False}
+
+
+@router.post("/{name}/update")
+async def update_plugin(
+    name: str,
+    _user: dict = Depends(require_founder),
+):
+    root = _plugin_root()
+    dest = root / name
+    if not dest.is_dir():
+        raise HTTPException(
+            status_code=404, detail=f"Plugin '{name}' not found",
+        )
+
+    source_url: str | None = None
+    manifest = _read_plugin_json(dest)
+    if manifest:
+        source_url = manifest.get("source") or manifest.get("homepage")
+
+    if not source_url:
+        mkt = _read_marketplace_json()
+        entry = next((p for p in mkt if p.get("name") == name), None)
+        if entry:
+            base = entry.get("source") or _read_marketplace_repo_url()
+            subdir = (
+                entry.get("subdir")
+                or entry.get("path", "").lstrip("./")
+                or name
+            )
+            if base:
+                base = base.rstrip("/")
+                source_url = (
+                    f"{base}/tree/main/{subdir}" if subdir else base
+                )
+
+    if not source_url:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No source URL for plugin '{name}'.",
+        )
+
+    owner, repo, branch, subpath = _parse_github_url(source_url)
+    headers = _github_headers(_user)
+
+    api_url = (
+        f"{_GITHUB_API}/repos/{owner}/{repo}/contents/{subpath}"
+        .rstrip("/")
+    )
+    resp = http_requests.get(
+        api_url, headers=headers, timeout=15, verify=False,
+    )
+    if resp.status_code == 404:
+        raise HTTPException(
+            status_code=404, detail="GitHub path not found",
+        )
+    resp.raise_for_status()
+
+    contents = resp.json()
+    if not isinstance(contents, list):
+        contents = [contents]
+
+    files: list[dict] = []
+    _recurse_github_dir(
+        headers, owner, repo, contents,
+        subpath, files, max_files=128,
+    )
+    if not files:
+        raise HTTPException(
+            status_code=400,
+            detail="No importable files found at source URL",
+        )
+
+    was_disabled = (dest / ".disabled").exists()
+    shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    for f_info in files:
+        fp = dest / f_info["path"]
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text(f_info["content"], encoding="utf-8")
+    if was_disabled:
+        (dest / ".disabled").touch()
+
+    _logger.info(
+        "plugin updated: %s (%d files)", name, len(files),
+    )
+    return {"ok": True, "name": name, "files": len(files)}

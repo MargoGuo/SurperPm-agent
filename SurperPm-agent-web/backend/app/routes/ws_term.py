@@ -8,23 +8,27 @@ tests, or debug. Mirrors the loopat terminal protocol: JSON frames
 from __future__ import annotations
 
 import asyncio
-import fcntl
 import json
 import logging
 import os
-import pty
 import signal
-import struct
-import termios
+import sys
 from http.cookies import SimpleCookie
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.database import async_session
-from app.models.goal import Goal
 from app.services import exec_env
 from app.services import session as session_svc
+from app.services.knowledge_store import get_store
+
+_IS_WIN = sys.platform == "win32"
+
+if not _IS_WIN:
+    import fcntl
+    import pty
+    import struct
+    import termios
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +45,8 @@ def _extract_session_cookie(ws: WebSocket) -> str | None:
 
 
 def _set_winsize(fd: int, rows: int, cols: int) -> None:
+    if _IS_WIN:
+        return
     try:
         winsize = struct.pack("HHHH", rows, cols, 0, 0)
         fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
@@ -56,16 +62,24 @@ async def ws_goal_term(websocket: WebSocket, goal_id: int):
         await websocket.close(code=4001, reason="invalid session")
         return
 
-    async with async_session() as db:
-        goal = await db.get(Goal, goal_id)
+    store = get_store()
+    goal = store.get("goals", goal_id)
     if not goal:
         await websocket.close(code=4004, reason="goal not found")
         return
 
-    workdir = exec_env.workdir_for(goal.workspace_id, goal_id)
+    workdir = exec_env.workdir_for(goal.get("workspace_id", ""), goal_id)
     cwd = str(workdir) if workdir.is_dir() else str(Path.home())
 
     await websocket.accept()
+
+    if _IS_WIN:
+        await websocket.send_text(json.dumps({
+            "type": "data",
+            "data": "\x1b[31m[Terminal not supported on Windows]\x1b[0m\r\n",
+        }))
+        await websocket.close()
+        return
 
     if not workdir.is_dir():
         await websocket.send_text(json.dumps({
@@ -90,7 +104,7 @@ async def ws_goal_term(websocket: WebSocket, goal_id: int):
         **os.environ,
         "TERM": "xterm-256color",
         "SuperPmAgent_GOAL_ID": str(goal_id),
-        "SuperPmAgent_WORKSPACE": goal.workspace_id,
+        "SuperPmAgent_WORKSPACE": goal.get("workspace_id", ""),
     }
 
     try:

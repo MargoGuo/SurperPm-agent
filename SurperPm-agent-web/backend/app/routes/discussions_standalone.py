@@ -1,31 +1,21 @@
 """Standalone Discussions — pre-goal brainstorming chat (no goal_id required)."""
 import asyncio
-import logging
 
-import anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
-from app.database import async_session, get_session
-from app.models.discussion import Discussion
-from app.models.workspace import Workspace
 from app.routes.deps import require_auth
-from app.services.event_bus import DISCUSSION_CREATED, DISCUSSION_DELTA, bus
-
-_logger = logging.getLogger(__name__)
+from app.services.event_bus import DISCUSSION_CREATED, bus
+from app.services.knowledge_store import KnowledgeStore, get_store
 
 router = APIRouter()
 
 
-async def _get_default_workspace_id(session: AsyncSession) -> str:
-    stmt = select(Workspace).limit(1)
-    result = await session.execute(stmt)
-    ws = result.scalar_one_or_none()
-    if not ws:
+def _get_default_workspace_id(store: KnowledgeStore) -> str:
+    workspaces = store.list("workspaces")
+    if not workspaces:
         raise HTTPException(status_code=404, detail="No workspace found")
-    return ws.id
+    return workspaces[0]["id"]
 
 
 class StandaloneDiscussionCreate(BaseModel):
@@ -40,221 +30,186 @@ async def list_standalone_discussions(
     topic_id: int | None = None,
     limit: int = 50,
     offset: int = 0,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    workspace_id = await _get_default_workspace_id(session)
-    stmt = (
-        select(Discussion)
-        .where(Discussion.workspace_id == workspace_id)
-        .where(Discussion.goal_id.is_(None))  # type: ignore[union-attr]
-    )
-    if topic_id is not None:
-        stmt = stmt.where(Discussion.topic_id == topic_id)
-    stmt = stmt.order_by(Discussion.created_at.asc()).limit(limit).offset(offset)
-    result = await session.execute(stmt)
-    return result.scalars().all()
+    workspace_id = _get_default_workspace_id(store)
+    rows = store.list_discussions(topic_id=topic_id)
+    filtered = [
+        r for r in rows
+        if r.get("workspace_id") == workspace_id and r.get("goal_id") is None
+    ]
+    filtered.sort(key=lambda r: r.get("created_at", ""))
+    return filtered[offset:offset + limit]
 
 
 @router.post("")
 async def create_standalone_discussion(
     body: StandaloneDiscussionCreate,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    workspace_id = await _get_default_workspace_id(session)
+    workspace_id = _get_default_workspace_id(store)
 
-    discussion = Discussion(
-        workspace_id=workspace_id,
-        goal_id=None,
-        role=body.role,
-        content=body.content,
-        topic_id=body.topic_id,
-        author=_user.get("username"),
-    )
-    session.add(discussion)
-    await session.commit()
-    await session.refresh(discussion)
-
-    await bus.emit(DISCUSSION_CREATED, {
-        "id": discussion.id,
+    disc_data: dict = {
         "workspace_id": workspace_id,
         "goal_id": None,
         "role": body.role,
         "content": body.content,
         "topic_id": body.topic_id,
-        "created_at": discussion.created_at.isoformat(),
+        "author": _user.get("username"),
+    }
+    if body.image_data_uri:
+        disc_data["image_data_uri"] = body.image_data_uri
+    discussion = await store.create_discussion(disc_data)
+
+    await bus.emit(DISCUSSION_CREATED, {
+        "id": discussion["id"],
+        "workspace_id": workspace_id,
+        "goal_id": None,
+        "role": body.role,
+        "content": body.content,
+        "topic_id": body.topic_id,
+        "created_at": discussion["created_at"],
     })
 
     if body.role == "user":
+        from app.services.ai_chat import generate_ai_reply
+
         asyncio.create_task(
-            _generate_ai_reply_standalone(
-                workspace_id, body.content, body.image_data_uri, body.topic_id,
+            generate_ai_reply(
+                workspace_id, body.content,
+                image_data_uri=body.image_data_uri,
+                topic_id=body.topic_id,
             )
         )
 
     return discussion
 
 
-_SYSTEM_PROMPT = (
+_BASE_SYSTEM_PROMPT = (
     "You are a helpful project management assistant for SuperPmAgent. "
     "You help brainstorm ideas, discuss project direction, and clarify goals. "
-    "Be concise and actionable. Reply in the same language the user uses."
+    "Be concise and actionable. Reply in the same language the user uses.\n\n"
+    "When the conversation reaches a point where concrete tasks or goals "
+    "can be identified, output each proposed goal as a fenced code block "
+    "with language tag `goal-proposal` containing a JSON object. Example:\n"
+    "```goal-proposal\n"
+    '{"title": "Implement user login", "description": "Add OAuth login flow"}\n'
+    "```\n"
+    "You can output multiple goal-proposal blocks in one reply. "
+    "Only propose goals when the user seems ready to commit to actions, "
+    "not during early exploration."
 )
 
-_MAX_CONTEXT_MESSAGES = 20
 
+def _build_system_prompt() -> str:
+    import json
 
-async def _generate_ai_reply_standalone(
-    workspace_id: str,
-    user_content: str,
-    image_data_uri: str | None = None,
-    topic_id: int | None = None,
-) -> None:
-    from app.services.ai_key_resolver import resolve_ai_base_url, resolve_ai_key, resolve_ai_model
+    from app.services.knowledge_distiller import get_top_learnings
 
-    api_key = await resolve_ai_key()
+    prompt = _BASE_SYSTEM_PROMPT
+    store = get_store()
+    root = store._root.parent
 
-    disc_id: int | None = None
+    sections: list[str] = []
+
+    # 1. Skills
     try:
-        if not api_key:
-            async with async_session() as db:
-                err_msg = Discussion(
-                    workspace_id=workspace_id,
-                    goal_id=None,
-                    content="⚠️ 当前 AI API 未配置，请在 Settings → AI Model 中设置 API Key。",
-                    role="agent",
-                    topic_id=topic_id,
+        from app.routes.skills import _scan_skills
+        skills = _scan_skills()
+        if skills:
+            lines = [f"- **{s['name']}**: {s['description']}" for s in skills]
+            sections.append(
+                "## Available Skills\n" + "\n".join(lines)
+            )
+    except Exception:
+        pass
+
+    # 2. Plugins
+    try:
+        plugins_dir = root / "plugins"
+        if plugins_dir.is_dir():
+            names = []
+            for d in sorted(plugins_dir.iterdir()):
+                if not d.is_dir() or d.name.startswith("."):
+                    continue
+                manifest = d / ".claude-plugin" / "plugin.json"
+                if manifest.is_file():
+                    m = json.loads(manifest.read_text(encoding="utf-8"))
+                    desc = m.get("description", "")
+                    names.append(f"- **{m.get('name', d.name)}**: {desc}")
+            if names:
+                sections.append(
+                    "## Installed Plugins\n" + "\n".join(names)
                 )
-                db.add(err_msg)
-                await db.commit()
-                await db.refresh(err_msg)
-            await bus.emit(DISCUSSION_CREATED, {
-                "id": err_msg.id,
-                "workspace_id": workspace_id,
-                "goal_id": None,
-                "role": "agent",
-                "content": err_msg.content,
-                "topic_id": topic_id,
-                "created_at": err_msg.created_at.isoformat(),
-            })
-            await bus.emit(DISCUSSION_DELTA, {
-                "workspace_id": workspace_id,
-                "goal_id": None,
-                "discussion_id": err_msg.id,
-                "delta": "",
-                "done": True,
-            })
-            return
+    except Exception:
+        pass
 
-        async with async_session() as db:
-            agent_msg = Discussion(
-                workspace_id=workspace_id,
-                goal_id=None,
-                content="",
-                role="agent",
-                topic_id=topic_id,
+    # 3. MCP Servers
+    try:
+        from app.routes.mcp import _read_servers
+        servers = _read_servers()
+        if servers:
+            lines = []
+            for name, cfg in servers.items():
+                status = "enabled" if cfg.get("enabled") else "disabled"
+                lines.append(f"- **{name}** ({status})")
+            sections.append(
+                "## MCP Servers\n" + "\n".join(lines)
             )
-            db.add(agent_msg)
-            await db.commit()
-            await db.refresh(agent_msg)
-            disc_id = agent_msg.id
+    except Exception:
+        pass
 
-        await bus.emit(DISCUSSION_CREATED, {
-            "id": disc_id,
-            "workspace_id": workspace_id,
-            "goal_id": None,
-            "role": "agent",
-            "content": "",
-            "topic_id": topic_id,
-            "created_at": agent_msg.created_at.isoformat(),
-        })
-
-        async with async_session() as db:
-            stmt = (
-                select(Discussion)
-                .where(Discussion.workspace_id == workspace_id)
-                .where(Discussion.goal_id.is_(None))  # type: ignore[union-attr]
-            )
-            if topic_id is not None:
-                stmt = stmt.where(Discussion.topic_id == topic_id)
-            stmt = stmt.order_by(Discussion.created_at.desc()).limit(_MAX_CONTEXT_MESSAGES)
-            result = await db.execute(stmt)
-            recent = list(reversed(result.scalars().all()))
-
-        messages: list[dict] = []
-        for msg in recent:
-            if msg.id == disc_id:
+    # 4. Knowledge structure
+    try:
+        dirs = []
+        for p in sorted(root.iterdir()):
+            if p.name.startswith(".") or p.name == "__pycache__":
                 continue
-            role = "user" if msg.role == "user" else "assistant"
-            messages.append({"role": role, "content": msg.content})
+            if p.is_dir():
+                dirs.append(f"- `{p.name}/`")
+            elif p.is_file() and p.suffix == ".md":
+                dirs.append(f"- `{p.name}`")
+        if dirs:
+            sections.append(
+                "## Knowledge Repository Structure\n" + "\n".join(dirs)
+            )
+    except Exception:
+        pass
 
-        if image_data_uri and messages and messages[-1]["role"] == "user":
-            media_type = "image/png"
-            b64_data = image_data_uri
-            if image_data_uri.startswith("data:"):
-                header, b64_data = image_data_uri.split(",", 1)
-                if "image/jpeg" in header:
-                    media_type = "image/jpeg"
-            messages[-1]["content"] = [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": media_type,
-                        "data": b64_data,
-                    },
-                },
-                {"type": "text", "text": messages[-1]["content"]},
-            ]
+    # 5. Team profile
+    try:
+        team_md = root / "profiles" / "team.md"
+        if team_md.is_file():
+            content = team_md.read_text(encoding="utf-8")[:500]
+            sections.append(f"## Team Profile\n{content}")
+    except Exception:
+        pass
 
-        base_url = await resolve_ai_base_url()
-        model = await resolve_ai_model()
-        client = anthropic.AsyncAnthropic(
-            api_key=api_key,
-            base_url=base_url or None,
+    # 6. Domain knowledge summaries
+    try:
+        domain_dir = root / "domain"
+        if domain_dir.is_dir():
+            index = domain_dir / "INDEX.md"
+            if index.is_file():
+                content = index.read_text(encoding="utf-8")[:800]
+                sections.append(f"## Domain Knowledge\n{content}")
+    except Exception:
+        pass
+
+    # 7. Learnings
+    learnings = get_top_learnings(budget_tokens=300)
+    if learnings:
+        sections.append(
+            "## Team Learnings\n"
+            "Use these to inform your answers:\n"
+            f"{learnings}"
         )
-        full_text = ""
 
-        async with client.messages.stream(
-            model=model,
-            max_tokens=1024,
-            system=_SYSTEM_PROMPT,
-            messages=messages,
-        ) as stream:
-            async for text in stream.text_stream:
-                full_text += text
-                await bus.emit(DISCUSSION_DELTA, {
-                    "workspace_id": workspace_id,
-                    "goal_id": None,
-                    "discussion_id": disc_id,
-                    "delta": text,
-                })
+    if sections:
+        prompt += "\n\n" + "\n\n".join(sections)
 
-        async with async_session() as db:
-            stmt = select(Discussion).where(Discussion.id == disc_id)
-            result = await db.execute(stmt)
-            row = result.scalar_one_or_none()
-            if row:
-                row.content = full_text
-                db.add(row)
-                await db.commit()
+    return prompt
 
-        await bus.emit(DISCUSSION_DELTA, {
-            "workspace_id": workspace_id,
-            "goal_id": None,
-            "discussion_id": disc_id,
-            "delta": "",
-            "done": True,
-        })
 
-    except Exception as e:
-        _logger.warning("Standalone AI reply failed: %s", e)
-        if disc_id is not None:
-            await bus.emit(DISCUSSION_DELTA, {
-                "workspace_id": workspace_id,
-                "goal_id": None,
-                "discussion_id": disc_id,
-                "delta": "",
-                "error": f"AI 回复出错: {e}",
-            })

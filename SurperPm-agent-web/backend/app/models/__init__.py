@@ -4,6 +4,7 @@ from app.models.discussion import Discussion
 from app.models.execution import Execution
 from app.models.global_config import GlobalConfig
 from app.models.goal import Goal
+from app.models.goal_group import GoalGroup
 from app.models.mcp_server import MCPServer
 from app.models.secret import Secret
 from app.models.skill import Skill, SkillFile
@@ -15,6 +16,7 @@ __all__ = [
     "Execution",
     "GlobalConfig",
     "Goal",
+    "GoalGroup",
     "MCPServer",
     "Secret",
     "Skill",

@@ -48,14 +48,13 @@ async def resolve_ai_key() -> str | None:
 
 
 async def resolve_ai_base_url() -> str | None:
-    """Return the first non-empty base_url from: GlobalConfig → ai_config.json → env."""
-    from app.database import async_session
-    from app.models.global_config import GlobalConfig
+    """Return the first non-empty base_url from: KnowledgeStore settings → ai_config.json → env."""
+    from app.services.knowledge_store import get_store
 
-    async with async_session() as session:
-        cfg = await session.get(GlobalConfig, 1)
-        if cfg and cfg.ai_base_url:
-            return cfg.ai_base_url
+    store = get_store()
+    store_settings = store.get_settings()
+    if store_settings.get("ai_base_url"):
+        return store_settings["ai_base_url"]
 
     file_cfg = _read_ai_config_file()
     if file_cfg.get("base_url"):
@@ -69,13 +68,12 @@ async def resolve_ai_base_url() -> str | None:
 
 async def resolve_ai_model() -> str:
     """Return the configured model, defaulting to claude-sonnet-4-20260614."""
-    from app.database import async_session
-    from app.models.global_config import GlobalConfig
+    from app.services.knowledge_store import get_store
 
-    async with async_session() as session:
-        cfg = await session.get(GlobalConfig, 1)
-        if cfg and cfg.ai_model:
-            return cfg.ai_model
+    store = get_store()
+    store_settings = store.get_settings()
+    if store_settings.get("ai_model"):
+        return store_settings["ai_model"]
 
     file_cfg = _read_ai_config_file()
     if file_cfg.get("model"):

@@ -13,6 +13,7 @@ class Topic(SQLModel, table=True):
     name: str = Field(nullable=False)
     description: str | None = Field(default=None)
     goal_id: int | None = Field(default=None, foreign_key="goal.id")
+    session_name: str | None = Field(default=None)
     repo_url: str | None = Field(default=None)
     pinned: bool = Field(default=False)
     archived: bool = Field(default=False)

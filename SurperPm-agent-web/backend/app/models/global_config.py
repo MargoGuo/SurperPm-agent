@@ -18,5 +18,6 @@ class GlobalConfig(SQLModel, table=True):
     ai_api_key_enc: str | None = Field(default=None)
     ai_model: str | None = Field(default=None)
     github_token_enc: str | None = Field(default=None)
+    distill_config: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

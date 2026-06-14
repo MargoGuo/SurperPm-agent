@@ -39,6 +39,7 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("discussion", "topic_id", "INTEGER"),
     ("workspace", "repos", "TEXT"),
     ("topic", "repo_url", "TEXT"),
+    ("topic", "session_name", "TEXT"),
     ("goal", "slug", "TEXT"),
     ("goal", "repo_url", "TEXT"),
     ("goal", "repo_path", "TEXT"),
@@ -47,6 +48,10 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("global_config", "founder_username", "TEXT"),
     ("goal", "reviewed_by", "TEXT"),
     ("goal", "reviewed_at", "TEXT"),
+    ("goal", "group_id", "INTEGER"),
+    ("goal", "deadline", "TEXT"),
+    ("goal", "session_name", "TEXT"),
+    ("global_config", "distill_config", "TEXT"),
 ]
 
 

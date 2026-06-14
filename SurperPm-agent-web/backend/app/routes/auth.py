@@ -38,16 +38,22 @@ async def _ensure_knowledge_repo(repo: str, token: str, username: str = "") -> N
     """
     from app.database import async_session
     from app.models.global_config import GlobalConfig
+    from app.services.knowledge_store import get_store
+
+    store = get_store()
+    store_settings = store.get_settings()
+    repo_url = f"https://github.com/{repo}".removesuffix(".git")
+
+    if not store_settings.get("knowledge_repo_url"):
+        await store.update_settings({"knowledge_repo_url": repo_url})
 
     async with async_session() as session:
         cfg = await session.get(GlobalConfig, 1)
         if not cfg:
-            return
-        repo_url = f"https://github.com/{repo}"
-        if not cfg.knowledge_repo_url:
-            cfg.knowledge_repo_url = repo_url
-            if username and not cfg.founder_username:
-                cfg.founder_username = username
+            cfg = GlobalConfig(id=1)
+            session.add(cfg)
+        if username and not cfg.founder_username:
+            cfg.founder_username = username
         cfg.github_token_enc = encrypt(token)
         cfg.updated_at = datetime.now(UTC)
         session.add(cfg)
@@ -62,21 +68,31 @@ async def _global_config_snapshot() -> tuple[bool, str | None, str, str]:
     from app.database import async_session
     from app.models.global_config import GlobalConfig
     from app.services.crypto import decrypt
+    from app.services.knowledge_store import get_store
+
+    store = get_store()
+    store_settings = store.get_settings()
+    knowledge_repo_url = store_settings.get("knowledge_repo_url", "")
 
     async with async_session() as session:
         cfg = await session.get(GlobalConfig, 1)
         if not cfg:
             return False, None, "", ""
         repo = ""
-        if cfg.knowledge_repo_url:
-            repo = cfg.knowledge_repo_url.replace("https://github.com/", "").strip("/")
+        if knowledge_repo_url:
+            repo = (
+                knowledge_repo_url
+                .replace("https://github.com/", "")
+                .removesuffix(".git")
+                .strip("/")
+            )
         key = ""
         if cfg.ai_api_key_enc:
             try:
                 key = decrypt(cfg.ai_api_key_enc)
             except Exception:
                 key = ""
-        return bool(cfg.knowledge_repo_url), cfg.founder_username, repo, key
+        return bool(knowledge_repo_url), cfg.founder_username, repo, key
 
 
 def _post_with_retry(url: str, json: dict, max_retries: int = 3) -> requests.Response | None:
@@ -111,9 +127,11 @@ async def pat_repos(payload: dict) -> dict:
 
     try:
         user_info = github_client.get_user_info(pat)
-    except Exception:
+    except Exception as exc:
+        _logger.warning("PAT validation failed: %s", exc)
         raise HTTPException(
-            status_code=401, detail="Invalid PAT or GitHub unreachable"
+            status_code=401,
+            detail=f"Invalid PAT or GitHub unreachable: {exc}",
         ) from None
 
     try:
@@ -198,6 +216,17 @@ async def login(payload: dict, response: Response) -> dict:
 @router.post("/logout")
 async def logout(response: Response) -> dict:
     response.delete_cookie(COOKIE_NAME)
+
+    from app.database import async_session
+    from app.models.global_config import GlobalConfig
+
+    async with async_session() as session:
+        cfg = await session.get(GlobalConfig, 1)
+        if cfg and cfg.github_token_enc:
+            cfg.github_token_enc = None
+            session.add(cfg)
+            await session.commit()
+
     return {"ok": True}
 
 

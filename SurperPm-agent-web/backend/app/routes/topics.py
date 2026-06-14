@@ -1,16 +1,11 @@
 """Topics API — goal-scoped conversation channels."""
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
-from app.database import get_session
-from app.models.goal import Goal
-from app.models.topic import Topic
 from app.routes.deps import require_auth
 from app.services.event_bus import TOPIC_CREATED, TOPIC_UPDATED, bus
+from app.services.knowledge_store import KnowledgeStore, get_store
 
 router = APIRouter()
 
@@ -31,50 +26,40 @@ class TopicUpdate(BaseModel):
 @router.get("")
 async def list_topics(
     goal_id: int,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    stmt = (
-        select(Topic)
-        .where(
-            Topic.workspace_id == goal.workspace_id,
-            Topic.goal_id == goal_id,
-            Topic.archived == False,  # noqa: E712
-        )
-        .order_by(Topic.pinned.desc(), Topic.updated_at.desc())
-    )
-    result = await session.execute(stmt)
-    return result.scalars().all()
+    rows = store.list("topics", workspace_id=goal["workspace_id"], goal_id=goal_id)
+    return [r for r in rows if not r.get("archived", False)]
 
 
 @router.post("", status_code=201)
 async def create_topic(
     goal_id: int,
     body: TopicCreate,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    topic = Topic(
-        workspace_id=goal.workspace_id,
-        name=body.name,
-        description=body.description,
-        goal_id=goal_id,
-        repo_url=body.repo_url,
-    )
-    session.add(topic)
-    await session.commit()
-    await session.refresh(topic)
-    await bus.emit(TOPIC_CREATED, {
-        "topic_id": topic.id,
-        "workspace_id": goal.workspace_id,
+    topic = await store.create("topics", {
+        "workspace_id": goal["workspace_id"],
+        "name": body.name,
+        "description": body.description,
         "goal_id": goal_id,
-        "name": topic.name,
+        "repo_url": body.repo_url,
+        "pinned": False,
+        "archived": False,
+    })
+    await bus.emit(TOPIC_CREATED, {
+        "topic_id": topic["id"],
+        "workspace_id": goal["workspace_id"],
+        "goal_id": goal_id,
+        "name": topic["name"],
     })
     return topic
 
@@ -83,20 +68,14 @@ async def create_topic(
 async def get_topic(
     goal_id: int,
     topic_id: int,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    stmt = select(Topic).where(
-        Topic.id == topic_id,
-        Topic.workspace_id == goal.workspace_id,
-        Topic.goal_id == goal_id,
-    )
-    result = await session.execute(stmt)
-    topic = result.scalar_one_or_none()
-    if not topic:
+    topic = store.get("topics", topic_id)
+    if not topic or topic.get("goal_id") != goal_id:
         raise HTTPException(status_code=404, detail="Topic not found")
     return topic
 
@@ -106,57 +85,39 @@ async def update_topic(
     goal_id: int,
     topic_id: int,
     body: TopicUpdate,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    stmt = select(Topic).where(
-        Topic.id == topic_id,
-        Topic.workspace_id == goal.workspace_id,
-        Topic.goal_id == goal_id,
-    )
-    result = await session.execute(stmt)
-    topic = result.scalar_one_or_none()
-    if not topic:
+    topic = store.get("topics", topic_id)
+    if not topic or topic.get("goal_id") != goal_id:
         raise HTTPException(status_code=404, detail="Topic not found")
-    update_data = body.model_dump(exclude_unset=True)
-    for key, val in update_data.items():
-        setattr(topic, key, val)
-    topic.updated_at = datetime.now(UTC)
-    session.add(topic)
-    await session.commit()
-    await session.refresh(topic)
+    patch = body.model_dump(exclude_unset=True)
+    updated = await store.update("topics", topic_id, patch)
     await bus.emit(TOPIC_UPDATED, {
-        "topic_id": topic.id,
-        "workspace_id": goal.workspace_id,
+        "topic_id": topic_id,
+        "workspace_id": goal["workspace_id"],
         "goal_id": goal_id,
-        "name": topic.name,
+        "name": updated["name"],
     })
-    return topic
+    return updated
 
 
 @router.delete("/{topic_id}", status_code=204)
 async def delete_topic(
     goal_id: int,
     topic_id: int,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    stmt = select(Topic).where(
-        Topic.id == topic_id,
-        Topic.workspace_id == goal.workspace_id,
-        Topic.goal_id == goal_id,
-    )
-    result = await session.execute(stmt)
-    topic = result.scalar_one_or_none()
-    if not topic:
+    topic = store.get("topics", topic_id)
+    if not topic or topic.get("goal_id") != goal_id:
         raise HTTPException(status_code=404, detail="Topic not found")
-    if topic.name == "general":
+    if topic.get("name") == "general":
         raise HTTPException(status_code=400, detail="Cannot delete the #general topic")
-    await session.delete(topic)
-    await session.commit()
+    await store.delete("topics", topic_id)

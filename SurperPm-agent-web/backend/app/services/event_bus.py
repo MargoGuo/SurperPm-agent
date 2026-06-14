@@ -1,7 +1,10 @@
 """In-process async pub/sub event bus."""
+import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 EventHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -52,7 +55,10 @@ class EventBus:
 
     async def emit(self, event: str, payload: dict[str, Any]):
         for handler in self._handlers[event]:
-            await handler(payload)
+            try:
+                await handler(payload)
+            except Exception:
+                _logger.exception("EventBus handler error for event=%s", event)
 
 
 bus = EventBus()

@@ -1,16 +1,16 @@
-"""Goals API — CRUD, execution, review."""
+"""Goals API - CRUD, execution, review."""
+
 import asyncio
+import json
+import os
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
-from app.database import get_session
-from app.models.execution import Execution
-from app.models.goal import Goal
+from app.config import settings
 from app.routes.deps import require_auth
 from app.services.event_bus import (
     EXECUTION_COMPLETED,
@@ -21,6 +21,7 @@ from app.services.event_bus import (
 )
 from app.services.goal_executor import execute_goal as _execute_goal_bg
 from app.services.goal_executor import request_cancel, request_pause, request_resume
+from app.services.knowledge_store import KnowledgeStore, get_store
 
 router = APIRouter()
 
@@ -30,9 +31,17 @@ class GoalCreate(BaseModel):
     title: str
     description: str | None = None
     priority: int = 0
+    session_name: str | None = None
+    group_id: int | None = None
+    deadline: str | None = None
+    token_budget: int | None = None
+    assigned_to: str | None = None
     repo_url: str | None = None
     repo_path: str | None = None
     repos: str | None = None
+    schedule: str | None = None
+    delay_until: str | None = None
+    target: str | None = None
 
 
 class GoalUpdate(BaseModel):
@@ -43,7 +52,13 @@ class GoalUpdate(BaseModel):
     assigned_to: str | None = None
     suggested_assignee: str | None = None
     parent_goal_id: int | None = None
+    group_id: int | None = None
+    deadline: str | None = None
+    schedule: str | None = None
+    delay_until: str | None = None
+    target: str | None = None
     token_budget: int | None = None
+    session_name: str | None = None
     repo_url: str | None = None
     repo_path: str | None = None
     repos: str | None = None
@@ -54,60 +69,184 @@ def _slugify(title: str, goal_id: int | None = None) -> str:
     return slug or f"goal-{goal_id or 0}"
 
 
+def _knowledge_root() -> str:
+    return os.getenv("KNOWLEDGE_REPO_PATH") or settings.knowledge_repo_path
+
+
+def _notes_path(session_name: str) -> Path:
+    root = (_knowledge_root() or "").strip()
+    if not root:
+        raise HTTPException(
+            status_code=409,
+            detail="KNOWLEDGE_REPO_PATH is not configured",
+        )
+    return Path(root) / "sessions" / session_name / "notes.md"
+
+
+def _ready_for_goal(notes_text: str) -> bool:
+    return "ready_for_goal: yes" in notes_text.lower()
+
+
+def _assert_session_ready(session_name: str) -> None:
+    notes_path = _notes_path(session_name)
+    if not notes_path.exists():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session '{session_name}' notes.md not found",
+        )
+    notes_text = notes_path.read_text(encoding="utf-8")
+    if not _ready_for_goal(notes_text):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session '{session_name}' is not ready for goal execution",
+        )
+
+
+def _resolve_workspace(store: KnowledgeStore, workspace_ref: str) -> dict | None:
+    ws = store.get("workspaces", workspace_ref)
+    if ws:
+        return ws
+    for w in store.list("workspaces"):
+        if w.get("slug") == workspace_ref:
+            return w
+    return None
+
+
+def _has_repo_binding(goal: dict, workspace: dict) -> bool:
+    if goal.get("repo_url") or workspace.get("repo_url"):
+        return True
+    for raw in (goal.get("repos"), workspace.get("repos")):
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(data, list) and any(str(item).strip() for item in data):
+            return True
+    return False
+
+
 @router.get("")
 async def list_goals(
     status: str | None = None,
     workspace_id: str | None = None,
-    session: AsyncSession = Depends(get_session),
+    group_id: int | None = None,
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    stmt = select(Goal)
+    filters: dict = {}
     if workspace_id:
-        stmt = stmt.where(Goal.workspace_id == workspace_id)
+        filters["workspace_id"] = workspace_id
     if status:
-        stmt = stmt.where(Goal.status == status)
-    stmt = stmt.order_by(Goal.priority.desc(), Goal.created_at.desc())
-    result = await session.execute(stmt)
-    return result.scalars().all()
+        filters["status"] = status
+    if group_id is not None:
+        filters["group_id"] = group_id
+    rows = store.list("goals", **filters)
+    rows.sort(key=lambda r: (r.get("priority", 0), r.get("created_at", "")), reverse=True)
+    return rows
 
 
 @router.post("", status_code=201)
 async def create_goal(
     body: GoalCreate,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = Goal(
-        workspace_id=body.workspace_id,
-        title=body.title,
-        description=body.description,
-        priority=body.priority,
-        repo_url=body.repo_url,
-        repo_path=body.repo_path,
-        repos=body.repos,
+    workspace = _resolve_workspace(store, body.workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    initial_status = "todo"
+    if body.schedule:
+        initial_status = "scheduled"
+    elif body.delay_until:
+        initial_status = "todo"
+    data = {
+        "workspace_id": workspace["id"],
+        "title": body.title,
+        "description": body.description,
+        "priority": body.priority,
+        "status": initial_status,
+        "session_name": body.session_name,
+        "group_id": body.group_id,
+        "deadline": body.deadline,
+        "token_budget": body.token_budget,
+        "assigned_to": body.assigned_to,
+        "suggested_assignee": None,
+        "parent_goal_id": None,
+        "reviewed_by": None,
+        "reviewed_at": None,
+        "repo_url": body.repo_url,
+        "repo_path": body.repo_path,
+        "repos": body.repos,
+        "schedule": body.schedule,
+        "delay_until": body.delay_until,
+        "target": body.target,
+    }
+    goal = await store.create("goals", data)
+    goal["slug"] = _slugify(goal["title"], goal["id"])
+    await store.update("goals", goal["id"], {"slug": goal["slug"]})
+    await bus.emit(
+        GOAL_CREATED,
+        {
+            "goal_id": goal["id"],
+            "workspace_id": goal["workspace_id"],
+            "title": goal["title"],
+        },
     )
-    session.add(goal)
-    await session.commit()
-    await session.refresh(goal)
-    goal.slug = _slugify(goal.title, goal.id)
-    session.add(goal)
-    await session.commit()
-    await session.refresh(goal)
-    await bus.emit(GOAL_CREATED, {
-        "goal_id": goal.id,
-        "workspace_id": goal.workspace_id,
-        "title": goal.title,
-    })
     return goal
+
+
+class GoalBatchCreate(BaseModel):
+    workspace_id: str
+    goals: list[GoalCreate]
+
+
+@router.post("/batch", status_code=201)
+async def batch_create_goals(
+    body: GoalBatchCreate,
+    store: KnowledgeStore = Depends(get_store),
+    _user: dict = Depends(require_auth),
+):
+    workspace = _resolve_workspace(store, body.workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    created = []
+    for item in body.goals:
+        data = {
+            "workspace_id": workspace["id"],
+            "title": item.title,
+            "description": item.description,
+            "priority": item.priority,
+            "status": "todo",
+            "group_id": item.group_id,
+            "deadline": item.deadline,
+            "token_budget": item.token_budget,
+            "assigned_to": item.assigned_to,
+            "repo_url": item.repo_url,
+            "repo_path": item.repo_path,
+            "repos": item.repos,
+        }
+        goal = await store.create("goals", data)
+        goal["slug"] = _slugify(goal["title"], goal["id"])
+        await store.update("goals", goal["id"], {"slug": goal["slug"]})
+        created.append(goal)
+    for g in created:
+        await bus.emit(GOAL_CREATED, {
+            "goal_id": g["id"],
+            "workspace_id": g["workspace_id"],
+            "title": g["title"],
+        })
+    return created
 
 
 @router.get("/{goal_id}")
 async def get_goal(
     goal_id: int,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
     return goal
@@ -117,154 +256,150 @@ async def get_goal(
 async def update_goal(
     goal_id: int,
     body: GoalUpdate,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    update_data = body.model_dump(exclude_unset=True)
-    for key, val in update_data.items():
-        setattr(goal, key, val)
-    if "title" in update_data:
-        goal.slug = _slugify(goal.title, goal.id)
-    session.add(goal)
-    await session.commit()
-    await session.refresh(goal)
-    await bus.emit(GOAL_UPDATED, {
-        "goal_id": goal.id,
-        "workspace_id": goal.workspace_id,
-        "status": goal.status,
-    })
-    return goal
+    patch = body.model_dump(exclude_unset=True)
+    if "title" in patch:
+        patch["slug"] = _slugify(patch["title"], goal_id)
+    updated = await store.update("goals", goal_id, patch)
+    await bus.emit(
+        GOAL_UPDATED,
+        {
+            "goal_id": goal_id,
+            "workspace_id": updated["workspace_id"],
+            "status": updated.get("status"),
+        },
+    )
+    return updated
 
 
 @router.delete("/{goal_id}", status_code=204)
 async def delete_goal(
     goal_id: int,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    await session.delete(goal)
-    await session.commit()
+    await store.delete("goals", goal_id)
 
 
 @router.post("/{goal_id}/execute", status_code=202)
 async def execute_goal(
     goal_id: int,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    if goal.status == "doing":
+    if goal.get("status") == "doing":
         raise HTTPException(status_code=409, detail="Goal is already executing")
+    workspace = store.get("workspaces", goal["workspace_id"])
+    if not workspace:
+        raise HTTPException(status_code=409, detail="Workspace not found for goal")
+    if goal.get("session_name"):
+        _assert_session_ready(goal["session_name"])
+    if not _has_repo_binding(goal, workspace):
+        raise HTTPException(
+            status_code=409,
+            detail="No repo configured on goal or workspace",
+        )
 
-    # Pre-create the Execution row so we can return its ID immediately.
-    execution = Execution(
-        goal_id=goal_id,
-        workspace_id=goal.workspace_id,
-        status="pending",
-        token_budget=goal.token_budget,
-    )
-    session.add(execution)
-
-    goal.status = "doing"
-    session.add(goal)
-    await session.commit()
-    await session.refresh(goal)
-    await session.refresh(execution)
-
-    await bus.emit(GOAL_UPDATED, {
-        "goal_id": goal.id,
-        "workspace_id": goal.workspace_id,
-        "status": "doing",
+    execution = await store.create("executions", {
+        "goal_id": goal_id,
+        "workspace_id": goal["workspace_id"],
+        "status": "pending",
+        "token_budget": goal.get("token_budget"),
+        "error": None,
     })
-    asyncio.create_task(_execute_goal_bg(goal.workspace_id, goal.id, execution.id))
-    return {"goal_id": goal.id, "execution_id": execution.id, "status": "doing"}
+
+    await store.update("goals", goal_id, {"status": "doing"})
+
+    await bus.emit(
+        GOAL_UPDATED,
+        {
+            "goal_id": goal_id,
+            "workspace_id": goal["workspace_id"],
+            "status": "doing",
+        },
+    )
+    asyncio.create_task(_execute_goal_bg(goal["workspace_id"], goal_id, execution["id"]))
+    return {"goal_id": goal_id, "execution_id": execution["id"], "status": "doing"}
 
 
 @router.get("/{goal_id}/executions")
 async def list_goal_executions(
     goal_id: int,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    stmt = (
-        select(Execution)
-        .where(Execution.goal_id == goal_id)
-        .order_by(Execution.created_at.desc())
-    )
-    result = await session.execute(stmt)
-    return result.scalars().all()
+    rows = store.list("executions", goal_id=goal_id)
+    rows.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return rows
 
 
 @router.post("/{goal_id}/executions/{execution_id}/cancel", status_code=200)
 async def cancel_goal_execution(
     goal_id: int,
     execution_id: str,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    stmt = select(Execution).where(
-        Execution.id == execution_id, Execution.goal_id == goal_id
-    )
-    result = await session.execute(stmt)
-    execution = result.scalar_one_or_none()
-    if not execution:
+    execution = store.get("executions", execution_id)
+    if not execution or execution.get("goal_id") != goal_id:
         raise HTTPException(status_code=404, detail="Execution not found")
-    if execution.status not in ("pending", "running"):
+    if execution.get("status") not in ("pending", "running"):
         raise HTTPException(status_code=409, detail="Execution is not running")
 
-    # If the execution is in-flight, signal the agent to stop and let the
-    # background task finalize the execution/goal status and emit events.
     if request_cancel(execution_id):
         return {"ok": True, "execution_id": execution_id, "cancelling": True}
 
-    # Otherwise (no in-flight task in this process) flip the DB row directly.
-    execution.status = "failed"
-    execution.error = "Cancelled by user"
-    session.add(execution)
-    await session.commit()
-    await session.refresh(execution)
-    await bus.emit(EXECUTION_COMPLETED, {
-        "execution_id": execution_id,
-        "goal_id": goal_id,
-        "workspace_id": execution.workspace_id,
+    await store.update("executions", execution_id, {
         "status": "failed",
         "error": "Cancelled by user",
     })
+    await bus.emit(
+        EXECUTION_COMPLETED,
+        {
+            "execution_id": execution_id,
+            "goal_id": goal_id,
+            "workspace_id": execution["workspace_id"],
+            "status": "failed",
+            "error": "Cancelled by user",
+        },
+    )
     return {"ok": True, "execution_id": execution_id}
 
 
-async def _set_pause(goal_id: int, execution_id: str, session: AsyncSession, paused: bool):
-    """Shared pause/resume handler: toggle the in-flight agent loop + notify WS."""
-    stmt = select(Execution).where(
-        Execution.id == execution_id, Execution.goal_id == goal_id
-    )
-    result = await session.execute(stmt)
-    execution = result.scalar_one_or_none()
-    if not execution:
+async def _set_pause(
+    goal_id: int, execution_id: str, store: KnowledgeStore, paused: bool
+):
+    execution = store.get("executions", execution_id)
+    if not execution or execution.get("goal_id") != goal_id:
         raise HTTPException(status_code=404, detail="Execution not found")
-    if execution.status not in ("pending", "running"):
+    if execution.get("status") not in ("pending", "running"):
         raise HTTPException(status_code=409, detail="Execution is not running")
     toggled = request_pause(execution_id) if paused else request_resume(execution_id)
     if not toggled:
         raise HTTPException(status_code=409, detail="Execution is not in-flight")
-    # Live-only flag; not persisted (it has no meaning once the run ends).
-    await bus.emit(EXECUTION_PROGRESS, {
-        "execution_id": execution_id,
-        "goal_id": goal_id,
-        "workspace_id": execution.workspace_id,
-        "paused": paused,
-    })
+    await bus.emit(
+        EXECUTION_PROGRESS,
+        {
+            "execution_id": execution_id,
+            "goal_id": goal_id,
+            "workspace_id": execution["workspace_id"],
+            "paused": paused,
+        },
+    )
     return {"ok": True, "execution_id": execution_id, "paused": paused}
 
 
@@ -272,20 +407,20 @@ async def _set_pause(goal_id: int, execution_id: str, session: AsyncSession, pau
 async def pause_goal_execution(
     goal_id: int,
     execution_id: str,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    return await _set_pause(goal_id, execution_id, session, paused=True)
+    return await _set_pause(goal_id, execution_id, store, paused=True)
 
 
 @router.post("/{goal_id}/executions/{execution_id}/resume", status_code=200)
 async def resume_goal_execution(
     goal_id: int,
     execution_id: str,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     _user: dict = Depends(require_auth),
 ):
-    return await _set_pause(goal_id, execution_id, session, paused=False)
+    return await _set_pause(goal_id, execution_id, store, paused=False)
 
 
 class GoalReviewBody(BaseModel):
@@ -296,25 +431,28 @@ class GoalReviewBody(BaseModel):
 async def review_goal(
     goal_id: int,
     body: GoalReviewBody,
-    session: AsyncSession = Depends(get_session),
+    store: KnowledgeStore = Depends(get_store),
     user: dict = Depends(require_auth),
 ):
     if body.action not in ("approve", "reject"):
         raise HTTPException(status_code=400, detail="action must be approve or reject")
-    goal = await session.get(Goal, goal_id)
+    goal = store.get("goals", goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    if goal.status != "review":
+    if goal.get("status") != "review":
         raise HTTPException(status_code=409, detail="Goal is not in review state")
-    goal.status = "done" if body.action == "approve" else "failed"
-    goal.reviewed_by = user.get("login") or user.get("sub", "unknown")
-    goal.reviewed_at = datetime.now(UTC)
-    session.add(goal)
-    await session.commit()
-    await session.refresh(goal)
-    await bus.emit(GOAL_UPDATED, {
-        "goal_id": goal.id,
-        "workspace_id": goal.workspace_id,
-        "status": goal.status,
+    new_status = "done" if body.action == "approve" else "failed"
+    updated = await store.update("goals", goal_id, {
+        "status": new_status,
+        "reviewed_by": user.get("login") or user.get("sub", "unknown"),
+        "reviewed_at": datetime.now(UTC).isoformat(),
     })
-    return goal
+    await bus.emit(
+        GOAL_UPDATED,
+        {
+            "goal_id": goal_id,
+            "workspace_id": updated["workspace_id"],
+            "status": new_status,
+        },
+    )
+    return updated
