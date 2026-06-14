@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 import requests as http_requests
@@ -29,6 +30,10 @@ _MARKETPLACE_CACHE = ".marketplace-cache"
 
 class ImportRequest(BaseModel):
     url: str
+
+
+class SyncRepoRequest(BaseModel):
+    repo_urls: list[str] | None = None
 
 
 class PluginInfo(BaseModel):
@@ -592,3 +597,149 @@ async def update_plugin(
         "plugin updated: %s (%d files)", name, len(files),
     )
     return {"ok": True, "name": name, "files": len(files)}
+
+
+# ── Sync from remote git repo ─────────────────────────────────
+
+
+def _sync_config_file() -> Path:
+    return _plugin_root() / ".sync-config.json"
+
+
+def _read_sync_config() -> dict:
+    f = _sync_config_file()
+    if not f.is_file():
+        return {}
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return {}
+
+
+def _save_sync_config(data: dict) -> None:
+    f = _sync_config_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+@router.get("/sync-repo/config")
+async def get_sync_config(_user: dict = Depends(require_auth)):
+    cfg = _read_sync_config()
+    return {
+        "repo_urls": cfg.get("repo_urls", []),
+        "last_synced": cfg.get("last_synced"),
+        "results": cfg.get("results", []),
+    }
+
+
+@router.post("/sync-repo/config")
+async def set_sync_config(
+    body: SyncRepoRequest,
+    _user: dict = Depends(require_founder),
+):
+    if not body.repo_urls:
+        raise HTTPException(status_code=400, detail="repo_urls is required")
+    cfg = _read_sync_config()
+    cfg["repo_urls"] = [u.strip().rstrip("/") for u in body.repo_urls if u.strip()]
+    _save_sync_config(cfg)
+    return {"ok": True, "repo_urls": cfg["repo_urls"]}
+
+
+def _inject_token(url: str, token: str) -> str:
+    if token and url.startswith("https://"):
+        return url.replace("https://", f"https://{token}@")
+    return url
+
+
+def _sync_one_repo(url: str, root: Path, token: str) -> dict:
+    """Clone or pull a single repo, copy plugin dirs. Returns result dict."""
+    import re
+    m = re.search(r"/([^/]+?)(?:\.git)?$", url)
+    repo_name = m.group(1) if m else "repo"
+    clone_dir = root / ".sync-clones" / repo_name
+    auth_url = _inject_token(url, token)
+
+    try:
+        if clone_dir.is_dir() and (clone_dir / ".git").is_dir():
+            subprocess.run(
+                ["git", "-C", str(clone_dir), "pull", "--ff-only"],
+                capture_output=True, text=True, timeout=60, check=True,
+            )
+        else:
+            if clone_dir.exists():
+                shutil.rmtree(clone_dir, ignore_errors=True)
+            clone_dir.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(
+                ["git", "clone", "--depth", "1", auth_url, str(clone_dir)],
+                capture_output=True, text=True, timeout=120, check=True,
+            )
+    except subprocess.CalledProcessError as exc:
+        return {"repo_url": url, "ok": False, "error": exc.stderr[:200]}
+    except subprocess.TimeoutExpired:
+        return {"repo_url": url, "ok": False, "error": "timeout"}
+
+    commit = "unknown"
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(clone_dir), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode == 0:
+            commit = r.stdout.strip()
+    except Exception:
+        pass
+
+    synced: list[str] = []
+    for d in sorted(clone_dir.iterdir()):
+        if not d.is_dir() or d.name.startswith("."):
+            continue
+        manifest = d / ".claude-plugin" / "plugin.json"
+        if not manifest.is_file():
+            continue
+        dest = root / d.name
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        shutil.copytree(d, dest, dirs_exist_ok=True)
+        git_dir = dest / ".git"
+        if git_dir.exists():
+            shutil.rmtree(git_dir, ignore_errors=True)
+        synced.append(d.name)
+
+    return {"repo_url": url, "ok": True, "commit": commit, "synced": synced}
+
+
+@router.post("/sync-repo")
+async def sync_from_repo(
+    body: SyncRepoRequest | None = None,
+    _user: dict = Depends(require_founder),
+):
+    """Sync all configured plugin repos. Supports multiple GitHub URLs."""
+    cfg = _read_sync_config()
+    urls = (body.repo_urls if body and body.repo_urls else None) or cfg.get("repo_urls", [])
+    if not urls:
+        raise HTTPException(status_code=400, detail="No repo URLs configured")
+
+    token = _user.get("github_token", "")
+    root = _plugin_root()
+    results: list[dict] = []
+    total_synced: list[str] = []
+
+    for url in urls:
+        r = _sync_one_repo(url.strip().rstrip("/"), root, token)
+        results.append(r)
+        if r.get("ok"):
+            total_synced.extend(r.get("synced", []))
+
+    from datetime import datetime, UTC
+    cfg["repo_urls"] = [u.strip().rstrip("/") for u in urls]
+    cfg["last_synced"] = datetime.now(UTC).isoformat()
+    cfg["results"] = results
+    _save_sync_config(cfg)
+
+    _logger.info("sync-repo: %d repos, %d plugins total", len(urls), len(total_synced))
+    return {
+        "ok": all(r.get("ok") for r in results),
+        "results": results,
+        "total_synced": total_synced,
+        "count": len(total_synced),
+    }

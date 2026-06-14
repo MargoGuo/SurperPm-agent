@@ -1,11 +1,15 @@
 """FastAPI app entry for SuperPmAgent-web."""
 import asyncio
 import logging
+
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from app.database import create_db_and_tables
 from app.routes import agents as agents_routes
@@ -27,18 +31,15 @@ from app.routes import topics_standalone as topics_standalone_routes
 from app.routes import workspaces as workspace_routes
 from app.routes import ws as ws_routes
 from app.routes import ws_browser as ws_browser_routes
-# ws_term 依赖 fcntl/pty/termios 等 Unix 专属模块，Windows 上不可用。
-try:
-    from app.routes import ws_term as ws_term_routes
-
-    _HAS_WS_TERM = True
-except ModuleNotFoundError:
-    _HAS_WS_TERM = False
 from app.services.browser_manager import browser_manager
 from app.services.event_bus import ALL_EVENTS, bus
 from app.services.knowledge_distiller import DEFAULT_DISTILL_CONFIG, run_distill_cycle
 from app.services.knowledge_sync import ensure_knowledge_cloned
+from app.services.platform import IS_WIN, supports_terminal
 from app.ws.hub import hub
+
+if supports_terminal():
+    from app.routes import ws_term as ws_term_routes
 
 
 def _register_bus_to_hub_bridge():
@@ -146,12 +147,10 @@ async def _poll_goal_scheduler():
                     and delay
                     and delay <= now
                 ):
-                    _logger.info(
-                        "Scheduler: executing delayed goal %s",
-                        goal.get("id"),
-                    )
-                    ws_id = goal.get("workspace_id", "")
                     gid = goal.get("id")
+                    ws_id = goal.get("workspace_id", "")
+                    _logger.info("Scheduler: executing delayed goal %s", gid)
+                    await store.update("goals", gid, {"status": "doing"})
                     asyncio.create_task(execute_goal(ws_id, gid))
 
                 # Scheduled: check cron-like interval
@@ -162,6 +161,8 @@ async def _poll_goal_scheduler():
                         interval_h = float(schedule)
                     except (ValueError, TypeError):
                         continue
+                    if interval_h < 1:
+                        interval_h = 24
                     interval_s = interval_h * 3600
                     if not last or (
                         dt.fromisoformat(last).timestamp()
@@ -209,12 +210,29 @@ async def _recover_stuck_executions():
     for gid in goal_ids:
         goal = store.get("goals", gid)
         if goal and goal.get("status") == "doing":
-            await store.update("goals", gid, {"status": "failed"})
+            if goal.get("schedule"):
+                await store.update("goals", gid, {"status": "scheduled"})
+                _logger.info("Reset scheduled goal %s back to 'scheduled'", gid)
+            elif goal.get("delay_until"):
+                await store.update("goals", gid, {"status": "todo"})
+                _logger.info("Reset delayed goal %s back to 'todo'", gid)
+            else:
+                await store.update("goals", gid, {"status": "failed"})
     _logger.info("Recovered %d stuck execution(s) on startup", len(stuck))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Warn on Windows when running without ProactorEventLoop (subprocess may fail)
+    if IS_WIN:
+        loop = asyncio.get_running_loop()
+        if type(loop).__name__ != "ProactorEventLoop":
+            _logger.warning(
+                "Windows detected with %s — some features (Playwright, MCP tests) "
+                "may not work. Start with 'python run.py' for best compatibility.",
+                type(loop).__name__,
+            )
+
     await create_db_and_tables()
     await _recover_stuck_executions()
 
@@ -322,8 +340,28 @@ app.include_router(
 
 app.include_router(ws_routes.router)
 app.include_router(ws_browser_routes.router)
-if _HAS_WS_TERM:
+if supports_terminal():
     app.include_router(ws_term_routes.router)
+
+
+@app.get("/api/artifacts/{file_path:path}")
+async def serve_artifact(file_path: str, request: Request):
+    """Serve goal execution artifacts (md, docx, pdf, etc) for download."""
+    from app.services.knowledge_store import get_store
+
+    store = get_store()
+    root = store._root.parent
+    artifacts_dir = root / "artifacts"
+    target = (artifacts_dir / file_path).resolve()
+
+    if not str(target).startswith(str(artifacts_dir.resolve())):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Path traversal not allowed")
+    if not target.is_file():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    return FileResponse(target, filename=target.name)
 
 
 @app.get("/")

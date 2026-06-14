@@ -145,6 +145,21 @@ async def compose_goal_context(
     except Exception:
         pass
 
+    assigned_to = goal.get("assigned_to") or goal.get("source_username")
+    if assigned_to:
+        try:
+            root = store._root.parent
+            user_md = root / "profiles" / "users" / f"{assigned_to}.md"
+            if user_md.is_file():
+                content = user_md.read_text(encoding="utf-8")[:600]
+                parts.append(
+                    "\n## User Profile\n"
+                    "Adapt your approach based on this user's preferences:\n"
+                    + content
+                )
+        except Exception:
+            pass
+
     return "\n".join(parts)
 
 

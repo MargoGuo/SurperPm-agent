@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import signal
-import sys
 from http.cookies import SimpleCookie
 from pathlib import Path
 
@@ -21,10 +20,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services import exec_env
 from app.services import session as session_svc
 from app.services.knowledge_store import get_store
+from app.services.platform import IS_WIN
 
-_IS_WIN = sys.platform == "win32"
-
-if not _IS_WIN:
+if not IS_WIN:
     import fcntl
     import pty
     import struct
@@ -45,7 +43,7 @@ def _extract_session_cookie(ws: WebSocket) -> str | None:
 
 
 def _set_winsize(fd: int, rows: int, cols: int) -> None:
-    if _IS_WIN:
+    if IS_WIN:
         return
     try:
         winsize = struct.pack("HHHH", rows, cols, 0, 0)
@@ -73,7 +71,7 @@ async def ws_goal_term(websocket: WebSocket, goal_id: int):
 
     await websocket.accept()
 
-    if _IS_WIN:
+    if IS_WIN:
         await websocket.send_text(json.dumps({
             "type": "data",
             "data": "\x1b[31m[Terminal not supported on Windows]\x1b[0m\r\n",

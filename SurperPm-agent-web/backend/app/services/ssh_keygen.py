@@ -1,29 +1,43 @@
-"""SSH key pair generation using Ed25519."""
+"""SSH key pair generation using Ed25519 via system ssh-keygen."""
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+import subprocess
+import tempfile
+from pathlib import Path
+
+from app.services.platform import find_ssh_keygen
 
 
 def generate_ssh_keypair() -> tuple[str, str]:
-    """Generate an Ed25519 SSH key pair.
+    """Generate an Ed25519 SSH key pair using system ssh-keygen.
 
     Returns:
         (public_key, private_key) as OpenSSH-formatted strings.
     """
-    private_key = Ed25519PrivateKey.generate()
+    ssh_keygen = find_ssh_keygen()
+    tmp = Path(tempfile.mkdtemp())
+    keyfile = tmp / "id_ed25519"
 
-    # Serialize private key in OpenSSH format (no passphrase)
-    private_key_bytes = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.OpenSSH,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
+    try:
+        result = subprocess.run(
+            [ssh_keygen, "-t", "ed25519", "-f", str(keyfile), "-N", "", "-C", "SuperPmAgent"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"ssh-keygen failed: {result.stderr.strip()}")
 
-    # Serialize public key in OpenSSH format
-    public_key = private_key.public_key()
-    public_key_bytes = public_key.public_bytes(
-        encoding=serialization.Encoding.OpenSSH,
-        format=serialization.PublicFormat.OpenSSH,
-    )
+        private_key = keyfile.read_text()
+        public_key = (tmp / "id_ed25519.pub").read_text().strip()
 
-    return public_key_bytes.decode(), private_key_bytes.decode()
+        return public_key, private_key
+    finally:
+        for f in tmp.glob("id_ed25519*"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        try:
+            tmp.rmdir()
+        except OSError:
+            pass

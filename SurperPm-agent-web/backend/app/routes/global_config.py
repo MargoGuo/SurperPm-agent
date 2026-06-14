@@ -202,6 +202,39 @@ async def generate_ssh_key(
     return {"ssh_public_key": public_key}
 
 
+@router.post("/push-ssh-key-to-github")
+async def push_ssh_key_to_github(
+    store: KnowledgeStore = Depends(get_store),
+    user: dict = Depends(require_auth),
+):
+    """Add the SSH public key to the user's GitHub account via API."""
+    import requests as http_requests
+
+    store_settings = await store.read_settings()
+    pub_key = store_settings.get("ssh_public_key", "")
+    if not pub_key:
+        raise HTTPException(status_code=400, detail="No SSH public key. Generate one first.")
+
+    token = user.get("github_token", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="No GitHub token. Please re-login with GitHub.")
+
+    resp = http_requests.post(
+        "https://api.github.com/user/keys",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+        json={"title": "SuperPmAgent", "key": pub_key},
+        timeout=15,
+    )
+    if resp.status_code == 422:
+        errors = resp.json().get("errors", [])
+        if any("already" in (e.get("message", "") or "") for e in errors):
+            return {"ok": True, "message": "Key already exists on GitHub"}
+        raise HTTPException(status_code=422, detail=resp.json().get("message", "Validation failed"))
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=resp.status_code, detail=f"GitHub API error: {resp.text[:300]}")
+    return {"ok": True, "message": "SSH key added to GitHub", "key_id": resp.json().get("id")}
+
+
 # ── Secrets (KnowledgeStore-backed) ───────────────────────────
 
 

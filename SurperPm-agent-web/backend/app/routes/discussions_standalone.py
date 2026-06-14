@@ -81,6 +81,7 @@ async def create_standalone_discussion(
                 workspace_id, body.content,
                 image_data_uri=body.image_data_uri,
                 topic_id=body.topic_id,
+                username=_user.get("username"),
             )
         )
 
@@ -97,13 +98,15 @@ _BASE_SYSTEM_PROMPT = (
     "```goal-proposal\n"
     '{"title": "Implement user login", "description": "Add OAuth login flow"}\n'
     "```\n"
+    "Optional fields: `schedule` (hours interval for recurring goals, e.g. \"24\"), "
+    "`delay_minutes` (start after N minutes, e.g. 30).\n"
     "You can output multiple goal-proposal blocks in one reply. "
     "Only propose goals when the user seems ready to commit to actions, "
     "not during early exploration."
 )
 
 
-def _build_system_prompt() -> str:
+def _build_system_prompt(username: str | None = None) -> str:
     import json
 
     from app.services.knowledge_distiller import get_top_learnings
@@ -186,6 +189,19 @@ def _build_system_prompt() -> str:
             sections.append(f"## Team Profile\n{content}")
     except Exception:
         pass
+
+    # 5b. User personal profile
+    if username:
+        try:
+            user_md = root / "profiles" / "users" / f"{username}.md"
+            if user_md.is_file():
+                content = user_md.read_text(encoding="utf-8")[:600]
+                sections.append(
+                    f"## Current User Profile\n"
+                    f"Adapt your responses based on this user's preferences:\n{content}"
+                )
+        except Exception:
+            pass
 
     # 6. Domain knowledge summaries
     try:

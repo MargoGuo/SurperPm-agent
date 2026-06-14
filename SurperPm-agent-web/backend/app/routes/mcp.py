@@ -1,6 +1,5 @@
 """MCP Server management — reads/writes knowledge/mcp/servers.json."""
 
-import asyncio
 import json as _json
 import logging
 from pathlib import Path
@@ -297,18 +296,19 @@ async def _test_stdio(srv: dict) -> dict:
         env_extra = _json.loads(env_extra)
 
     import os
+    import asyncio as _asyncio
 
     env = {**os.environ, **env_extra}
     try:
-        proc = await asyncio.create_subprocess_exec(
+        proc = await _asyncio.create_subprocess_exec(
             cmd, *args,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stdin=_asyncio.subprocess.PIPE,
+            stdout=_asyncio.subprocess.PIPE,
+            stderr=_asyncio.subprocess.PIPE,
             env=env,
         )
         try:
-            _stdout, stderr = await asyncio.wait_for(
+            _stdout, stderr = await _asyncio.wait_for(
                 proc.communicate(b""), timeout=5,
             )
         except TimeoutError:
@@ -323,6 +323,18 @@ async def _test_stdio(srv: dict) -> dict:
             "ok": False,
             "error": f"Exit {proc.returncode}: {stderr.decode()[:200]}",
         }
+    except NotImplementedError:
+        # Windows SelectorEventLoop — fall back to synchronous subprocess
+        import subprocess as _sp
+        try:
+            proc = _sp.run(
+                [cmd, *args], capture_output=True, env=env, timeout=5,
+            )
+            return {"ok": True, "message": "Process exited cleanly"}
+        except _sp.TimeoutExpired:
+            return {"ok": True, "message": "Process started (killed after 5s)"}
+        except FileNotFoundError:
+            return {"ok": False, "error": f"Command not found: {cmd}"}
     except FileNotFoundError:
         return {"ok": False, "error": f"Command not found: {cmd}"}
     except Exception as e:

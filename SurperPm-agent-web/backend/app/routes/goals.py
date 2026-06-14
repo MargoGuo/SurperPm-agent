@@ -21,6 +21,7 @@ from app.services.event_bus import (
 )
 from app.services.goal_executor import execute_goal as _execute_goal_bg
 from app.services.goal_executor import request_cancel, request_pause, request_resume
+from app.services.goal_service import create_goal as _create_goal
 from app.services.knowledge_store import KnowledgeStore, get_store
 
 router = APIRouter()
@@ -156,43 +157,23 @@ async def create_goal(
     workspace = _resolve_workspace(store, body.workspace_id)
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    initial_status = "todo"
-    if body.schedule:
-        initial_status = "scheduled"
-    elif body.delay_until:
-        initial_status = "todo"
-    data = {
-        "workspace_id": workspace["id"],
-        "title": body.title,
-        "description": body.description,
-        "priority": body.priority,
-        "status": initial_status,
-        "session_name": body.session_name,
-        "group_id": body.group_id,
-        "deadline": body.deadline,
-        "token_budget": body.token_budget,
-        "assigned_to": body.assigned_to,
-        "suggested_assignee": None,
-        "parent_goal_id": None,
-        "reviewed_by": None,
-        "reviewed_at": None,
-        "repo_url": body.repo_url,
-        "repo_path": body.repo_path,
-        "repos": body.repos,
-        "schedule": body.schedule,
-        "delay_until": body.delay_until,
-        "target": body.target,
-    }
-    goal = await store.create("goals", data)
-    goal["slug"] = _slugify(goal["title"], goal["id"])
-    await store.update("goals", goal["id"], {"slug": goal["slug"]})
-    await bus.emit(
-        GOAL_CREATED,
-        {
-            "goal_id": goal["id"],
-            "workspace_id": goal["workspace_id"],
-            "title": goal["title"],
-        },
+    goal = await _create_goal(
+        title=body.title,
+        description=body.description,
+        priority=body.priority,
+        workspace_id=workspace["id"],
+        session_name=body.session_name,
+        group_id=body.group_id,
+        deadline=body.deadline,
+        token_budget=body.token_budget,
+        assigned_to=body.assigned_to,
+        repo_url=body.repo_url,
+        repo_path=body.repo_path,
+        repos=body.repos,
+        schedule=body.schedule,
+        delay_until=body.delay_until,
+        target=body.target,
+        source="api",
     )
     return goal
 
@@ -213,30 +194,21 @@ async def batch_create_goals(
         raise HTTPException(status_code=404, detail="Workspace not found")
     created = []
     for item in body.goals:
-        data = {
-            "workspace_id": workspace["id"],
-            "title": item.title,
-            "description": item.description,
-            "priority": item.priority,
-            "status": "todo",
-            "group_id": item.group_id,
-            "deadline": item.deadline,
-            "token_budget": item.token_budget,
-            "assigned_to": item.assigned_to,
-            "repo_url": item.repo_url,
-            "repo_path": item.repo_path,
-            "repos": item.repos,
-        }
-        goal = await store.create("goals", data)
-        goal["slug"] = _slugify(goal["title"], goal["id"])
-        await store.update("goals", goal["id"], {"slug": goal["slug"]})
+        goal = await _create_goal(
+            title=item.title,
+            description=item.description,
+            priority=item.priority,
+            workspace_id=workspace["id"],
+            group_id=item.group_id,
+            deadline=item.deadline,
+            token_budget=item.token_budget,
+            assigned_to=item.assigned_to,
+            repo_url=item.repo_url,
+            repo_path=item.repo_path,
+            repos=item.repos,
+            source="api_batch",
+        )
         created.append(goal)
-    for g in created:
-        await bus.emit(GOAL_CREATED, {
-            "goal_id": g["id"],
-            "workspace_id": g["workspace_id"],
-            "title": g["title"],
-        })
     return created
 
 
@@ -305,11 +277,7 @@ async def execute_goal(
         raise HTTPException(status_code=409, detail="Workspace not found for goal")
     if goal.get("session_name"):
         _assert_session_ready(goal["session_name"])
-    if not _has_repo_binding(goal, workspace):
-        raise HTTPException(
-            status_code=409,
-            detail="No repo configured on goal or workspace",
-        )
+    # Repo is optional — goals without repos run in a temp directory
 
     execution = await store.create("executions", {
         "goal_id": goal_id,

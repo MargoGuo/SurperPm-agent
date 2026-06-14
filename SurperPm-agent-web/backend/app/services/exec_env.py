@@ -11,21 +11,23 @@ is set up here first.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 import re
-import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.config import settings
 from app.services.crypto import decrypt
+from app.services.platform import NULL_DEVICE, remove_dir, run_cmd, set_key_permissions
 
 _logger = logging.getLogger(__name__)
 
-_REPOS_ROOT = Path("data/repos")
+# Place repos outside the backend directory so uvicorn --reload does not
+# trigger on git clone/pull during goal execution.
+# Resolved relative to this file so it is independent of the process CWD:
+#   app/services/exec_env.py → ../../../data/repos  (project-root/data/repos)
+_REPOS_ROOT = (Path(__file__).resolve().parent.parent.parent.parent / "data" / "repos").resolve()
 _SSH_PREFIX = re.compile(r"^(git@|ssh://)")
 _HTTPS_REPO = re.compile(r"^https?://(?:[^@/]+@)?([^/]+)/(.+?)(?:\.git)?/?$")
 _SHORT_REPO = re.compile(r"^[\w.-]+/[\w.-]+?(?:\.git)?/?$")
@@ -60,7 +62,7 @@ def resolve_repo_url(goal: dict, workspace: dict) -> str:
     for c in candidates:
         if c and c.strip():
             return c.strip()
-    raise RuntimeError("No repo_url configured on goal or workspace")
+    return ""
 
 
 def to_ssh_url(url: str) -> str:
@@ -80,7 +82,12 @@ def to_ssh_url(url: str) -> str:
 
 
 async def resolve_ssh_private_key_enc(workspace: dict) -> str | None:
-    """Global SSH key first, then workspace-level."""
+    """Workspace-level SSH key takes priority, fallback to global."""
+    # Workspace key first (more specific)
+    ws_key = workspace.get("ssh_private_key_enc")
+    if ws_key:
+        return ws_key
+    # Global key as fallback
     from app.database import async_session
     from app.models.global_config import GlobalConfig
 
@@ -88,7 +95,7 @@ async def resolve_ssh_private_key_enc(workspace: dict) -> str | None:
         cfg = await session.get(GlobalConfig, 1)
     if cfg and cfg.ssh_private_key_enc:
         return cfg.ssh_private_key_enc
-    return workspace.get("ssh_private_key_enc")
+    return None
 
 
 def prepare_ssh(private_key_enc: str | None, keydir: Path) -> tuple[Path | None, str | None]:
@@ -100,35 +107,25 @@ def prepare_ssh(private_key_enc: str | None, keydir: Path) -> tuple[Path | None,
     except Exception as e:
         raise RuntimeError(f"Failed to decrypt SSH key: {e}") from e
 
+    # Nuke stale keydir — icacls may have locked previous keyfiles as read-only
+    if keydir.exists():
+        remove_dir(keydir)
     keydir.mkdir(parents=True, exist_ok=True)
     keyfile = keydir / "id_ed25519"
     keyfile.write_text(private_key if private_key.endswith("\n") else private_key + "\n")
-    keyfile.chmod(0o600)
+    set_key_permissions(keyfile)
     git_ssh = (
         f"ssh -i {keyfile} -o IdentitiesOnly=yes "
-        "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null"
+        f"-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile={NULL_DEVICE}"
     )
     return keyfile, git_ssh
 
 
-async def _git(*args: str, env: dict[str, str]) -> str:
-    proc = await asyncio.create_subprocess_exec(
-        "git", *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env={**os.environ, **env},
-    )
-    stdout, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        raise RuntimeError(f"git {args[0]} failed: {stderr.decode().strip()}")
-    return stdout.decode()
-
-
 async def _default_branch(dest: Path, env: dict[str, str]) -> str:
     try:
-        await _git("-C", str(dest), "remote", "set-head", "origin", "-a", env=env)
-        ref = await _git(
-            "-C", str(dest), "symbolic-ref", "--short", "refs/remotes/origin/HEAD", env=env
+        await run_cmd("git", "-C", str(dest), "remote", "set-head", "origin", "-a", env=env)
+        ref = await run_cmd(
+            "git", "-C", str(dest), "symbolic-ref", "--short", "refs/remotes/origin/HEAD", env=env,
         )
         name = ref.strip().split("/")[-1]
         return name or "main"
@@ -140,15 +137,17 @@ async def clone_or_pull(ssh_url: str, dest: Path, env: dict[str, str]) -> str:
     """Clone the repo, or fetch+reset an existing clone. Returns the default branch name."""
     if (dest / ".git").is_dir():
         _logger.info("exec_env: fetching %s", dest)
-        await _git("-C", str(dest), "fetch", "--all", "--prune", env=env)
+        # Force remote to SSH — may have been previously cloned via HTTPS
+        await run_cmd("git", "-C", str(dest), "remote", "set-url", "origin", ssh_url, env=env)
+        await run_cmd("git", "-C", str(dest), "fetch", "--all", "--prune", env=env)
         branch = await _default_branch(dest, env)
-        await _git("-C", str(dest), "checkout", "-B", branch, f"origin/{branch}", env=env)
-        await _git("-C", str(dest), "reset", "--hard", f"origin/{branch}", env=env)
+        await run_cmd("git", "-C", str(dest), "checkout", "-B", branch, f"origin/{branch}", env=env)
+        await run_cmd("git", "-C", str(dest), "reset", "--hard", f"origin/{branch}", env=env)
         return branch
 
     _logger.info("exec_env: cloning %s → %s", ssh_url, dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    await _git("clone", ssh_url, str(dest), env=env)
+    await run_cmd("git", "clone", ssh_url, str(dest), env=env)
     return await _default_branch(dest, env)
 
 
@@ -198,7 +197,7 @@ def plugin_dirs() -> list[str]:
             _logger.info("exec_env: skipping disabled plugin: %s", d.name)
             continue
         if (d / ".claude-plugin" / "plugin.json").is_file():
-            dirs.append(str(d))
+            dirs.append(str(d.resolve()))
     return dirs
 
 
@@ -207,34 +206,40 @@ def workdir_for(workspace_id: str, goal_id: int) -> Path:
 
 
 async def prepare_execution(goal: dict, workspace: dict) -> ExecEnv:
-    """Clone the goal's repo via SSH and assemble env + plugin dirs."""
+    """Clone the goal's repo via SSH and assemble env + plugin dirs.
+
+    If no repo is configured, uses a temporary work directory (no git clone).
+    """
     goal_id = goal.get("id")
     assert goal_id is not None
     repo_url = resolve_repo_url(goal, workspace)
-    ssh_url = to_ssh_url(repo_url)
     workdir = workdir_for(workspace.get("id", ""), goal_id)
-    keydir = workdir.parent / f"goal-{goal_id}-ssh"
 
-    key_enc = await resolve_ssh_private_key_enc(workspace)
-    keyfile, git_ssh = prepare_ssh(key_enc, keydir)
-    if not git_ssh:
-        raise RuntimeError(
-            "No SSH key configured (global or workspace) — required for git clone/push"
-        )
-
-    env: dict[str, str] = {"GIT_SSH_COMMAND": git_ssh}
+    env: dict[str, str] = {}
     token = await resolve_github_token()
     if token:
         env["GH_TOKEN"] = token
         env["GITHUB_TOKEN"] = token
 
-    branch = await clone_or_pull(ssh_url, workdir, env)
+    keydir = None
+    branch = None
+
+    if repo_url:
+        ssh_url = to_ssh_url(repo_url)
+        keydir = workdir.parent / f"goal-{goal_id}-ssh"
+        key_enc = await resolve_ssh_private_key_enc(workspace)
+        keyfile, git_ssh = prepare_ssh(key_enc, keydir)
+        if git_ssh:
+            env["GIT_SSH_COMMAND"] = git_ssh
+        branch = await clone_or_pull(ssh_url, workdir, env)
+    else:
+        workdir.mkdir(parents=True, exist_ok=True)
 
     return ExecEnv(
         workdir=workdir,
         env=env,
         plugins=plugin_dirs(),
-        keydir=keydir if keyfile else None,
+        keydir=keydir,
         branch_hint=branch,
     )
 
@@ -242,4 +247,4 @@ async def prepare_execution(goal: dict, workspace: dict) -> ExecEnv:
 def cleanup_keydir(keydir: Path | None) -> None:
     """Remove the temporary SSH keyfile dir so credentials don't linger on disk."""
     if keydir and keydir.exists():
-        shutil.rmtree(keydir, ignore_errors=True)
+        remove_dir(keydir)

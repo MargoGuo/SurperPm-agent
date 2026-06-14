@@ -5,7 +5,6 @@ No database tables — the knowledge repo IS the database, Git IS the migration.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import math
@@ -408,44 +407,36 @@ async def _fetch_external_sources(config: dict) -> list[dict]:
 
 async def _git_commit_learnings(message: str = "auto-distill: update learnings") -> bool:
     """Git add + commit + push learnings directory."""
+    import subprocess as _sp
+
+    from app.services.platform import run_cmd
+
     repo_path = _target_path()
     if not (repo_path / ".git").is_dir():
         return False
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", str(repo_path), "add", "learnings/", ".logs/",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await asyncio.wait_for(proc.communicate(), timeout=10)
+        await run_cmd("git", "-C", str(repo_path), "add", "learnings/", ".logs/", timeout=10)
 
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", str(repo_path), "diff", "--cached", "--quiet",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        # diff --cached --quiet exits 0 when nothing to commit, 1 when there are changes.
+        # raw subprocess is needed here because we care about the specific exit code.
+        diff = _sp.run(
+            ["git", "-C", str(repo_path), "diff", "--cached", "--quiet"],
+            capture_output=True, timeout=5,
         )
-        await asyncio.wait_for(proc.communicate(), timeout=5)
-        if proc.returncode == 0:
-            return True
+        if diff.returncode == 0:
+            return True  # no changes to commit
 
-        proc = await asyncio.create_subprocess_exec(
+        await run_cmd(
             "git", "-C", str(repo_path),
             "-c", "user.name=SuperPmAgent", "-c", "user.email=SuperPmAgent@local",
             "commit", "-m", message,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            timeout=10,
         )
-        await asyncio.wait_for(proc.communicate(), timeout=10)
 
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", str(repo_path), "push",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await asyncio.wait_for(proc.communicate(), timeout=30)
-        return proc.returncode == 0
-    except Exception:
+        await run_cmd("git", "-C", str(repo_path), "push", timeout=30)
+        return True
+    except RuntimeError:
         _logger.warning("git commit learnings failed", exc_info=True)
         return False
 

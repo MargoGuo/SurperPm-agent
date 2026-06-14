@@ -21,10 +21,10 @@ log = logging.getLogger(__name__)
 
 _SCREENCAST_OPTS = {
     "format": "jpeg",
-    "quality": 45,
-    "maxWidth": 960,
-    "maxHeight": 720,
-    "everyNthFrame": 3,
+    "quality": 70,
+    "maxWidth": 1280,
+    "maxHeight": 960,
+    "everyNthFrame": 2,
 }
 
 
@@ -136,10 +136,14 @@ class BrowserManager:
             ctx = await self._pw_call(
                 lambda: self._browser.new_context(
                     viewport={"width": 1280, "height": 960},
-                    locale="zh-CN",
+                    locale="en-US",
                     permissions=["clipboard-read", "clipboard-write"],
                 )
             )
+            async def _close_default():
+                for p in ctx.pages:
+                    await p.close()
+            await self._pw_call(_close_default)
             self._contexts[workspace_id] = ctx
         return self._contexts[workspace_id]
 
@@ -431,7 +435,16 @@ class BrowserManager:
     async def navigate(self, page: Page, url: str) -> None:
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
-        await self._pw_call(lambda: page.goto(url, wait_until="domcontentloaded", timeout=30000))
+
+        async def _do():
+            try:
+                await page.goto(url, wait_until="commit", timeout=15000)
+            except Exception as e:
+                if "timeout" in str(e).lower():
+                    log.warning("navigate timeout (page still loading): %s", url)
+                else:
+                    raise
+        await self._pw_call(_do)
 
     async def go_back(self, page: Page) -> None:
         async def _do():

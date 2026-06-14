@@ -10,6 +10,7 @@ from app.services.knowledge_store import get_store
 _logger = logging.getLogger(__name__)
 
 _MAX_CONTEXT_MESSAGES = 20
+_EVOLVE_EVERY_N = 10  # analyze profile evolution every N messages
 
 
 async def generate_ai_reply(
@@ -19,6 +20,7 @@ async def generate_ai_reply(
     goal_id: int | None = None,
     image_data_uri: str | None = None,
     topic_id: int | None = None,
+    username: str | None = None,
 ) -> None:
     from app.routes.discussions_standalone import _build_system_prompt
     from app.services.ai_key_resolver import (
@@ -125,7 +127,7 @@ async def generate_ai_reply(
         async with client.messages.stream(
             model=model,
             max_tokens=1024,
-            system=_build_system_prompt(),
+            system=_build_system_prompt(username=username),
             messages=messages,
         ) as stream:
             async for text in stream.text_stream:
@@ -153,6 +155,10 @@ async def generate_ai_reply(
             "done": True,
         })
 
+        if username and disc_id and disc_id % _EVOLVE_EVERY_N == 0:
+            import asyncio
+            asyncio.create_task(_maybe_evolve_profile(username, messages, store))
+
     except Exception as e:
         _logger.warning("AI reply failed: %s", e)
         if disc_id is not None:
@@ -173,3 +179,55 @@ async def generate_ai_reply(
                 "delta": error_text,
                 "done": True,
             })
+
+
+async def _maybe_evolve_profile(
+    username: str, messages: list[dict], store,
+) -> None:
+    """Analyze recent conversation to auto-update user profile preferences."""
+    try:
+        from app.services.ai_key_resolver import resolve_ai_key, resolve_ai_base_url, resolve_ai_model
+
+        root = store._root.parent
+        user_md_path = root / "profiles" / "users" / f"{username}.md"
+        if not user_md_path.is_file():
+            return
+
+        current_profile = user_md_path.read_text(encoding="utf-8")
+        recent_msgs = messages[-10:]
+        conversation = "\n".join(
+            f"[{m['role']}] {m['content'][:200]}" for m in recent_msgs
+        )
+
+        api_key = await resolve_ai_key()
+        if not api_key:
+            return
+
+        client = anthropic.AsyncAnthropic(
+            api_key=api_key,
+            base_url=await resolve_ai_base_url() or None,
+        )
+
+        resp = await client.messages.create(
+            model=await resolve_ai_model(),
+            max_tokens=400,
+            system=(
+                "You are a profile evolution engine. Given a user's current profile and recent conversation, "
+                "determine if the profile should be updated. Output ONLY the updated markdown profile if changes are needed, "
+                "or output exactly 'NO_CHANGE' if no update is warranted. "
+                "Only update fields where the conversation provides clear evidence of a preference change. "
+                "Preserve the existing frontmatter and structure."
+            ),
+            messages=[{
+                "role": "user",
+                "content": f"## Current Profile\n{current_profile}\n\n## Recent Conversation\n{conversation}",
+            }],
+        )
+
+        result = resp.content[0].text.strip()
+        if result != "NO_CHANGE" and len(result) > 50:
+            user_md_path.write_text(result, encoding="utf-8")
+            _logger.info("profile evolved for user %s", username)
+
+    except Exception:
+        _logger.debug("profile evolution skipped for %s", username, exc_info=True)
