@@ -1,0 +1,6 @@
+{
+  "name": "SuperPmAgent-learning",
+  "displayName": "SuperPmAgent Learning",
+  "description": "Knowledge lifecycle management — distillation, cleanup, archiving, and organization of learnings and execution artifacts.",
+  "version": "0.1.0"
+}

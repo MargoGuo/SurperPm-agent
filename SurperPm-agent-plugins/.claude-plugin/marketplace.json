@@ -26,6 +26,11 @@
       "name": "SuperPmAgent-business",
       "source": "./SuperPmAgent-business",
       "description": "Reusable business-change patterns."
+    },
+    {
+      "name": "SuperPmAgent-learning",
+      "source": "./SuperPmAgent-learning",
+      "description": "Knowledge lifecycle management — distillation, cleanup, archiving, and sync."
     }
   ]
 }

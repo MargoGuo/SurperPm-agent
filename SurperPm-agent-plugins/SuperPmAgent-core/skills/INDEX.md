@@ -1,9 +1,5 @@
 # SuperPmAgent Core Skills
 
-| Skill | Path | Use When |
-|---|---|---|
-| find | `find/SKILL.md` | Discover relevant skills, knowledge, and extensions by convention. |
-| find-extensions | `find-extensions/SKILL.md` | Select only the extension prompts relevant to the current action. |
-| distill | `distill/SKILL.md` | Turn loop output into reusable skill, knowledge, or extension candidates. |
+SuperPmAgent-core has no standalone skills. It provides two commands (`goal`, `clarify`) and two hooks (`pre-tool-use`, `stop`).
 
-These skills define the orchestration layer for SuperPmAgent commands and hooks.
+Resource discovery is handled by the global CLAUDE.md prompt via directory conventions (`SuperPmAgent-*/skills/INDEX.md`). Extension injection is handled by the `pre-tool-use.py` hook. Knowledge distillation is a scheduled Goal using the `SuperPmAgent-learning` plugin.

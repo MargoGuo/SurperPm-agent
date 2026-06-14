@@ -6,6 +6,8 @@
 | coding | `coding/SKILL.md` | Implement a scoped code change after exploration. |
 | run-tests | `run-tests/SKILL.md` | Run lint, unit tests, integration checks, and builds. |
 | debugger | `debugger/SKILL.md` | Fix failing commands with evidence and a capped loop. |
+| acceptance-review | `acceptance-review/SKILL.md` | Compare the final diff and test evidence against acceptance criteria before PR. |
 | submit-pr | `submit-pr/SKILL.md` | Create a reviewable pull request from the target repo. |
+| code-context | `code-context/SKILL.md` | Optional deep locate via local CLI (analyze/explore/trace) in large or multi-module repos. |
 
 The core `find` skill reads this file to discover coding capabilities.
